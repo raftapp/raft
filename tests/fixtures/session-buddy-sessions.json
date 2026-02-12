@@ -1,0 +1,78 @@
+{
+  "sessions": [
+    {
+      "name": "Work Session",
+      "created": "2024-02-10",
+      "windows": [
+        {
+          "id": 1,
+          "tabs": [
+            {
+              "url": "https://github.com/notifications",
+              "title": "Notifications - GitHub",
+              "favIconUrl": "https://github.com/favicon.ico",
+              "pinned": true,
+              "active": false
+            },
+            {
+              "url": "https://linear.app/team/project/board",
+              "title": "Project Board - Linear",
+              "favIconUrl": "https://linear.app/favicon.ico",
+              "pinned": false,
+              "active": true
+            },
+            {
+              "url": "https://docs.google.com/document/d/1abc/edit",
+              "title": "Design Doc - Google Docs",
+              "favIconUrl": "https://docs.google.com/favicon.ico",
+              "pinned": false,
+              "active": false
+            }
+          ]
+        },
+        {
+          "id": 2,
+          "tabs": [
+            {
+              "url": "https://localhost:3000/dashboard",
+              "title": "Dev Server - Dashboard",
+              "pinned": false,
+              "active": true
+            },
+            {
+              "url": "https://stackoverflow.com/questions/12345/some-question",
+              "title": "Some Question - Stack Overflow",
+              "favIconUrl": "https://cdn.sstatic.net/Sites/stackoverflow/Img/favicon.ico",
+              "pinned": false,
+              "active": false
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Reading List",
+      "created": "2024-02-09",
+      "windows": [
+        {
+          "id": 1,
+          "tabs": [
+            {
+              "url": "https://blog.pragmaticengineer.com/the-pulse-90/",
+              "title": "The Pulse #90 - Pragmatic Engineer",
+              "favIconUrl": "https://blog.pragmaticengineer.com/favicon.ico",
+              "pinned": false,
+              "active": false
+            },
+            {
+              "url": "https://martinfowler.com/articles/patterns-of-distributed-systems/",
+              "title": "Patterns of Distributed Systems",
+              "pinned": false,
+              "active": false
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

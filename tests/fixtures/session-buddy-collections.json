@@ -1,0 +1,62 @@
+{
+  "collections": [
+    {
+      "title": "Research Tabs",
+      "created": "2024-01-15T10:30:00Z",
+      "modified": "2024-01-15T12:00:00Z",
+      "folders": [
+        {
+          "title": "JavaScript",
+          "links": [
+            {
+              "url": "https://developer.mozilla.org/en-US/docs/Web/JavaScript",
+              "title": "JavaScript | MDN",
+              "favIconUrl": "https://developer.mozilla.org/favicon.ico",
+              "pinned": true,
+              "active": false
+            },
+            {
+              "url": "https://tc39.es/ecma262/",
+              "title": "ECMAScript Language Specification",
+              "favIconUrl": "https://tc39.es/favicon.ico",
+              "pinned": false,
+              "active": true
+            }
+          ]
+        },
+        {
+          "title": "TypeScript",
+          "links": [
+            {
+              "url": "https://www.typescriptlang.org/docs/",
+              "title": "TypeScript Documentation",
+              "favIconUrl": "https://www.typescriptlang.org/favicon.ico",
+              "pinned": false,
+              "active": false
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "title": "Shopping",
+      "created": "2024-01-20T09:00:00Z",
+      "folders": [
+        {
+          "links": [
+            {
+              "url": "https://www.amazon.com/dp/B09V3KXJPB?ref=ppx_yo2ov_dt_b_fed_asin_title",
+              "title": "Mechanical Keyboard - Amazon.com",
+              "favIconUrl": "https://www.amazon.com/favicon.ico",
+              "pinned": false
+            },
+            {
+              "url": "https://www.newegg.com/p/N82E16824012042",
+              "title": "Monitor 27\" 4K - Newegg.com"
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

@@ -1,0 +1,64 @@
+@import 'tailwindcss';
+@config "../../tailwind.config.js";
+
+/* Reduced motion - disable animations for users who prefer reduced motion */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
+
+/* High contrast mode - increase contrast for visibility */
+@media (prefers-contrast: more) {
+  :root {
+    --focus-ring-width: 3px;
+  }
+
+  button,
+  a,
+  input,
+  select,
+  textarea {
+    border-width: 2px;
+  }
+}
+
+/* Windows High Contrast (forced colors) */
+@media (forced-colors: active) {
+  button,
+  [role='button'] {
+    border: 2px solid ButtonText;
+  }
+
+  :focus-visible {
+    outline: 3px solid Highlight !important;
+    outline-offset: 2px !important;
+  }
+
+  a:focus-visible {
+    outline: 3px solid LinkText !important;
+  }
+}
+
+/* Skip link - visually hidden until focused */
+.skip-link {
+  position: absolute;
+  top: -100px;
+  left: 0;
+  background: #351b12;
+  color: #fff;
+  padding: 8px 16px;
+  z-index: 100;
+  text-decoration: none;
+  font-weight: 500;
+  border-radius: 0 0 4px 0;
+}
+
+.skip-link:focus {
+  top: 0;
+}

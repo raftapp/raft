@@ -1,0 +1,72 @@
+{
+  "manifest_version": 3,
+  "key": "MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAnNo7iW6avUw96UaWfeFOLTzUv6t3nbw+hQ5eImlydZYKfQwN6U6KTQxUbTkD2nNE/0ihUTh0aInXGum1r+VkeH8s+xWyRNPOtzFaPB2jjQDaBE27QbGgWGLdupFrdnK1YuvXt98fg9deS9eXrbgqrLSH3ewJIR5RQH0DXQDjkv8a3XjaALI8wfzixWS5Ys4tcP82p1BLpg/9xpG06BfbMXL6ZuSObUSVoPGNlFIrdUYi89pQfjbAVyYPO4b0Z+yCAwNi25RB6r9S2u6MELRBRYR6mc3KNEboVueuDR+7AfLMJASwWPct1NylCvAyf1izWeKa3+DW5xKinXW+jpSXUQIDAQAB",
+  "name": "Raft",
+  "version": "1.0.0",
+  "description": "Suspend inactive tabs to save memory and keep your sessions safe with multi-layer backup protection. Open source, privacy first.",
+  "content_security_policy": {
+    "extension_pages": "script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: https:; connect-src 'self' https://www.googleapis.com https://oauth2.googleapis.com https://api.lemonsqueezy.com; object-src 'none'"
+  },
+  "permissions": [
+    "tabs",
+    "tabGroups",
+    "storage",
+    "alarms",
+    "contextMenus",
+    "identity"
+  ],
+  "host_permissions": [
+    "https://www.googleapis.com/*",
+    "https://oauth2.googleapis.com/*",
+    "https://api.lemonsqueezy.com/*"
+  ],
+  "oauth2": {
+    "client_id": "set-by-vite-from-env",
+    "scopes": ["https://www.googleapis.com/auth/drive.appdata"]
+  },
+  "background": {
+    "service_worker": "src/background/index.ts",
+    "type": "module"
+  },
+  "action": {
+    "default_popup": "src/popup/index.html",
+    "default_icon": {
+      "16": "icons/icon16.png",
+      "48": "icons/icon48.png",
+      "128": "icons/icon128.png"
+    },
+    "default_title": "Raft"
+  },
+  "options_page": "src/options/index.html",
+  "icons": {
+    "16": "icons/icon16.png",
+    "48": "icons/icon48.png",
+    "128": "icons/icon128.png"
+  },
+  "commands": {
+    "suspend-current-tab": {
+      "suggested_key": {
+        "default": "Alt+Shift+S"
+      },
+      "description": "Suspend the current tab"
+    },
+    "suspend-other-tabs": {
+      "suggested_key": {
+        "default": "Alt+Shift+O"
+      },
+      "description": "Suspend all other tabs in this window"
+    },
+    "close-duplicates": {
+      "suggested_key": {
+        "default": "Alt+Shift+D"
+      },
+      "description": "Close duplicate tabs"
+    },
+    "save-session": {
+      "suggested_key": {
+        "default": "Alt+Shift+A"
+      },
+      "description": "Save the current session"
+    }
+  }
+}

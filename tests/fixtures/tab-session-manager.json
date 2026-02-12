@@ -1,0 +1,83 @@
+[
+  {
+    "name": "Development",
+    "date": 1707580800000,
+    "id": "a1b2c3d4-e5f6-7890-abcd-ef1234567890",
+    "windows": {
+      "window-100": {
+        "tab-1": {
+          "url": "https://github.com/nicedoc/onetab",
+          "title": "nicedoc/onetab: OneTab extension",
+          "favIconUrl": "https://github.com/favicon.ico",
+          "pinned": true,
+          "index": 0
+        },
+        "tab-2": {
+          "url": "https://vitejs.dev/guide/",
+          "title": "Getting Started | Vite",
+          "favIconUrl": "https://vitejs.dev/logo.svg",
+          "pinned": false,
+          "index": 1
+        },
+        "tab-3": {
+          "url": "https://preactjs.com/guide/v10/hooks/",
+          "title": "Hooks - Preact",
+          "favIconUrl": "https://preactjs.com/favicon.ico",
+          "pinned": false,
+          "index": 2
+        }
+      },
+      "window-200": {
+        "tab-4": {
+          "url": "https://tailwindcss.com/docs/installation",
+          "title": "Installation - Tailwind CSS",
+          "favIconUrl": "https://tailwindcss.com/favicons/favicon.ico",
+          "pinned": false,
+          "index": 0
+        },
+        "tab-5": {
+          "url": "https://developer.chrome.com/docs/extensions/reference/api/tabs",
+          "title": "chrome.tabs - Chrome Extensions",
+          "favIconUrl": "https://developer.chrome.com/favicon.ico",
+          "pinned": false,
+          "index": 1
+        }
+      }
+    },
+    "windowsInfo": {
+      "window-100": { "focused": true, "type": "normal", "state": "normal" },
+      "window-200": { "focused": false, "type": "normal", "state": "normal" }
+    },
+    "windowsNumber": 2,
+    "tabsNumber": 5,
+    "tag": ["dev"],
+    "sessionStartTime": 1707580000000
+  },
+  {
+    "name": "Research",
+    "date": 1707494400000,
+    "id": "f9e8d7c6-b5a4-3210-fedc-ba0987654321",
+    "windows": {
+      "window-300": {
+        "tab-6": {
+          "url": "https://arxiv.org/abs/2301.00001",
+          "title": "Paper Title - arXiv",
+          "favIconUrl": "https://arxiv.org/favicon.ico",
+          "pinned": false,
+          "index": 0
+        },
+        "tab-7": {
+          "url": "https://scholar.google.com/scholar?q=machine+learning",
+          "title": "machine learning - Google Scholar",
+          "favIconUrl": "https://scholar.google.com/favicon.ico",
+          "pinned": false,
+          "index": 1
+        }
+      }
+    },
+    "windowsNumber": 1,
+    "tabsNumber": 2,
+    "tag": [],
+    "sessionStartTime": 1707494000000
+  }
+]

@@ -1,0 +1,9 @@
+https://github.com/nicedoc/onetab | OneTab - Share and Export
+https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Array/map | Array.prototype.map() - JavaScript | MDN
+https://stackoverflow.com/questions/9549780/what-is-the-difference-between-an-int-and-a-long-in-c?rq=1 | What is the difference between an int and a long in C++?
+
+https://www.typescriptlang.org/docs/handbook/2/types-from-types.html | TypeScript: Documentation - Creating Types from Types
+https://vitejs.dev/guide/features.html#typescript | Features | Vite
+
+https://example.com
+https://news.ycombinator.com/item?id=39283733 | Ask HN: What are you working on?

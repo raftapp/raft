@@ -1,0 +1,38 @@
+{
+  "lists": [
+    {
+      "title": "Frontend Tools",
+      "cards": [
+        {
+          "url": "https://vitejs.dev/",
+          "title": "Vite | Next Generation Frontend Tooling",
+          "customTitle": "Vite"
+        },
+        {
+          "url": "https://tailwindcss.com/",
+          "title": "Tailwind CSS - Rapidly build modern websites without ever leaving your HTML.",
+          "customTitle": ""
+        },
+        {
+          "url": "https://preactjs.com/",
+          "title": "Preact - Fast 3kB alternative to React"
+        }
+      ]
+    },
+    {
+      "title": "Documentation",
+      "cards": [
+        {
+          "url": "https://developer.mozilla.org/en-US/",
+          "title": "MDN Web Docs",
+          "customTitle": "MDN"
+        },
+        {
+          "url": "https://web.dev/",
+          "title": "web.dev",
+          "customTitle": "web.dev - Chrome team resources"
+        }
+      ]
+    }
+  ]
+}

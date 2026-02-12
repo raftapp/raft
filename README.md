@@ -5,7 +5,7 @@
 <h1 align="center">Raft</h1>
 
 <p align="center">
-  <a href="https://github.com/raftapp/raft/actions"><img src="https://github.com/raftapp/raft/actions/workflows/build.yml/badge.svg" alt="CI" /></a>
+  <a href="https://github.com/raftapp/raft/actions"><img src="https://github.com/raftapp/raft/actions/workflows/ci.yml/badge.svg" alt="CI" /></a>
   <a href="https://codecov.io/gh/raftapp/raft"><img src="https://codecov.io/gh/raftapp/raft/graph/badge.svg" alt="codecov" /></a>
 </p>
 

@@ -12,7 +12,7 @@
 import { readFileSync, writeFileSync, existsSync, createWriteStream } from 'fs'
 import { join, dirname } from 'path'
 import { fileURLToPath } from 'url'
-import { execSync } from 'child_process'
+import { execSync, execFileSync } from 'child_process'
 import { homedir } from 'os'
 
 const __dirname = dirname(fileURLToPath(import.meta.url))
@@ -57,7 +57,7 @@ if (mode === 'crx') {
   }
 
   const distDir = join(rootDir, 'dist')
-  execSync(`${chrome} --pack-extension=${distDir} --pack-extension-key=${keyPath}`, {
+  execFileSync(chrome, [`--pack-extension=${distDir}`, `--pack-extension-key=${keyPath}`], {
     stdio: 'inherit',
   })
 

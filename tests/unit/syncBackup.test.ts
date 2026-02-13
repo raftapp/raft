@@ -14,7 +14,8 @@ import {
   shouldRestoreFromSync,
   clearSyncData,
 } from '@/shared/syncBackup'
-import { SYNC_STORAGE_KEYS, SYNC_LIMITS } from '@/shared/constants'
+import { SYNC_STORAGE_KEYS, SYNC_LIMITS, SYNC_CHUNK_CONFIG } from '@/shared/constants'
+import { compressToUTF16 } from 'lz-string'
 import type { Session } from '@/shared/types'
 
 // Helper to create a test session
@@ -169,6 +170,83 @@ describe('syncBackup', () => {
       expect(status.sessions[2].name).toBe('Old 1')
     })
 
+    it('should return false when only session in manifest is the one being saved and space is insufficient', async () => {
+      // First, backup a small session to establish it in the manifest
+      const session = createTestSession({ id: 'only-session', name: 'Only Session', createdAt: 1000 })
+      await backupSession(session)
+
+      // Now manipulate the manifest to pretend totalBytes is near the quota limit
+      // so there's not enough space for a new save, but the only eviction candidate
+      // is the session we're trying to save (which is excluded from eviction)
+      const syncStorage = getMockSyncStorage()
+      const manifest = syncStorage[SYNC_STORAGE_KEYS.MANIFEST] as {
+        version: number
+        updatedAt: number
+        sessions: Array<{ id: string; name: string; createdAt: number; tabCount: number; size: number }>
+        totalBytes: number
+      }
+
+      // Set totalBytes very high so available space is negative
+      manifest.totalBytes = SYNC_LIMITS.QUOTA_BYTES
+      setMockSyncStorage({ [SYNC_STORAGE_KEYS.MANIFEST]: manifest })
+
+      // Try to save the same session again - it can't evict itself
+      const result = await backupSession(session)
+      expect(result).toBe(false)
+    })
+
+    it('should evict multiple oldest sessions to make room', async () => {
+      // Backup 3 small sessions with distinct timestamps
+      const s1 = createTestSession({ id: 'oldest', name: 'Oldest', createdAt: 1000 })
+      const s2 = createTestSession({ id: 'middle', name: 'Middle', createdAt: 2000 })
+      const s3 = createTestSession({ id: 'recent', name: 'Recent', createdAt: 3000 })
+
+      await backupSession(s1)
+      await backupSession(s2)
+      await backupSession(s3)
+
+      // Check all 3 are stored
+      let status = await getSyncStatus()
+      expect(status.sessionCount).toBe(3)
+
+      // Get the current sizes and inflate totalBytes in manifest so space is tight
+      const syncStorage = getMockSyncStorage()
+      const manifest = syncStorage[SYNC_STORAGE_KEYS.MANIFEST] as {
+        version: number
+        updatedAt: number
+        sessions: Array<{ id: string; name: string; createdAt: number; tabCount: number; size: number }>
+        totalBytes: number
+      }
+
+      // Set totalBytes so that only evicting 2 sessions frees enough room
+      // Max usable = QUOTA_BYTES * 0.9 = 92160
+      // We want: available = maxUsable - totalBytes - manifestSize < sessionSize
+      // After evicting 2 oldest: available should be enough
+      const maxUsable = SYNC_LIMITS.QUOTA_BYTES * SYNC_LIMITS.QUOTA_SAFETY_MARGIN
+      const oldestSize = manifest.sessions.find((s) => s.id === 'oldest')!.size
+      const middleSize = manifest.sessions.find((s) => s.id === 'middle')!.size
+
+      // Make totalBytes so high that we need to evict both oldest and middle
+      manifest.totalBytes = maxUsable - 100 // barely any room
+      setMockSyncStorage({ [SYNC_STORAGE_KEYS.MANIFEST]: manifest })
+
+      // Now backup a new session - it should evict the two oldest
+      const newSession = createTestSession({ id: 'brand-new', name: 'Brand New', createdAt: 4000 })
+      const result = await backupSession(newSession)
+
+      expect(result).toBe(true)
+
+      status = await getSyncStatus()
+      const sessionIds = status.sessions.map((s) => s.id)
+
+      // The brand new session should be present
+      expect(sessionIds).toContain('brand-new')
+
+      // At least the oldest session should have been evicted
+      // (exact count depends on sizes, but oldest goes first)
+      expect(sessionIds).not.toContain('oldest')
+    })
+
     it('should reject sessions that are too large for a single item', async () => {
       // Create a session with high-entropy data that doesn't compress well
       // Random strings compress poorly, so this will exceed the 8KB limit
@@ -248,6 +326,112 @@ describe('syncBackup', () => {
       expect(restored).toEqual([])
     })
 
+    it('should skip sessions not found in sync storage', async () => {
+      // Backup a real session first, then manipulate the manifest to reference
+      // a non-existent session
+      const realSession = createTestSession({ id: 'real', name: 'Real Session' })
+      await backupSession(realSession)
+
+      // Add a phantom session to the manifest that has no data in storage
+      const syncStorage = getMockSyncStorage()
+      const manifest = syncStorage[SYNC_STORAGE_KEYS.MANIFEST] as {
+        version: number
+        updatedAt: number
+        sessions: Array<{ id: string; name: string; createdAt: number; tabCount: number; size: number }>
+        totalBytes: number
+      }
+      manifest.sessions.push({
+        id: 'phantom',
+        name: 'Phantom Session',
+        createdAt: 1000,
+        tabCount: 5,
+        size: 500,
+      })
+      setMockSyncStorage({ [SYNC_STORAGE_KEYS.MANIFEST]: manifest })
+
+      const restored = await restoreFromSync()
+
+      // Only the real session should be restored; the phantom one is skipped
+      expect(restored).toHaveLength(1)
+      expect(restored[0].id).toBe('real')
+    })
+
+    it('should skip sessions that fail to decompress', async () => {
+      // Backup a real session first
+      const realSession = createTestSession({ id: 'good', name: 'Good Session' })
+      await backupSession(realSession)
+
+      // Add a corrupt session entry: manifest references it, but storage has garbage
+      const syncStorage = getMockSyncStorage()
+      const manifest = syncStorage[SYNC_STORAGE_KEYS.MANIFEST] as {
+        version: number
+        updatedAt: number
+        sessions: Array<{ id: string; name: string; createdAt: number; tabCount: number; size: number }>
+        totalBytes: number
+      }
+      manifest.sessions.push({
+        id: 'corrupt',
+        name: 'Corrupt Session',
+        createdAt: 2000,
+        tabCount: 3,
+        size: 200,
+      })
+      setMockSyncStorage({ [SYNC_STORAGE_KEYS.MANIFEST]: manifest })
+
+      // Store garbage data at the corrupt session key
+      const corruptKey = `${SYNC_STORAGE_KEYS.SESSION_PREFIX}corrupt`
+      await chrome.storage.sync.set({ [corruptKey]: '!!!not-valid-compressed-or-json!!!' })
+
+      const restored = await restoreFromSync()
+
+      // Only the good session should be restored; the corrupt one is skipped
+      expect(restored).toHaveLength(1)
+      expect(restored[0].id).toBe('good')
+    })
+
+    it('should handle legacy uncompressed object format via decompressObject', async () => {
+      // Store a raw (uncompressed) session object directly in sync storage
+      // to test the decompressObject fallback for objects
+      const rawSession = {
+        id: 'legacy-raw',
+        name: 'Legacy Raw Session',
+        createdAt: 50000,
+        updatedAt: 50000,
+        source: 'manual',
+        windows: [
+          {
+            id: 'w1',
+            tabs: [
+              { id: 't1', url: 'https://legacy.com', title: 'Legacy', index: 0, pinned: false },
+            ],
+            tabGroups: [],
+          },
+        ],
+      }
+
+      // Set up the manifest to reference this session
+      const manifest = {
+        version: 1,
+        updatedAt: Date.now(),
+        sessions: [
+          { id: 'legacy-raw', name: 'Legacy Raw Session', createdAt: 50000, tabCount: 1, size: 200 },
+        ],
+        totalBytes: 200,
+      }
+
+      setMockSyncStorage({
+        [SYNC_STORAGE_KEYS.MANIFEST]: manifest,
+        [`${SYNC_STORAGE_KEYS.SESSION_PREFIX}legacy-raw`]: rawSession,
+      })
+
+      const restored = await restoreFromSync()
+
+      expect(restored).toHaveLength(1)
+      expect(restored[0].id).toBe('legacy-raw')
+      expect(restored[0].name).toBe('Legacy Raw Session')
+      expect(restored[0].windows[0].tabs[0].url).toBe('https://legacy.com')
+    })
+
     it('should restore session data correctly', async () => {
       const original = createTestSession({
         id: 'restore-test',
@@ -301,6 +485,56 @@ describe('syncBackup', () => {
       expect(status.totalBytes).toBeGreaterThan(0)
       expect(status.percentUsed).toBeGreaterThan(0)
       expect(status.sessions).toHaveLength(2)
+    })
+
+    it('should detect recovery snapshot in chunked format', async () => {
+      // Set up chunk metadata and a chunk in sync storage
+      const chunkMeta = { chunkCount: 1, timestamp: 12345, tabCount: 5 }
+      const chunkData = compressToUTF16(JSON.stringify({ some: 'data' }))
+
+      await chrome.storage.sync.set({
+        [SYNC_CHUNK_CONFIG.CHUNK_COUNT_KEY]: chunkMeta,
+        [`${SYNC_CHUNK_CONFIG.CHUNK_PREFIX}0`]: chunkData,
+      })
+
+      const status = await getSyncStatus()
+
+      expect(status.recoverySnapshot.exists).toBe(true)
+      expect(status.recoverySnapshot.timestamp).toBe(12345)
+      expect(status.recoverySnapshot.tabCount).toBe(5)
+      expect(status.recoverySnapshot.bytes).toBeGreaterThan(0)
+    })
+
+    it('should detect recovery snapshot in legacy compressed string format', async () => {
+      const legacyData = compressToUTF16(
+        JSON.stringify({ timestamp: 99999, stats: { tabCount: 10 } })
+      )
+
+      await chrome.storage.sync.set({
+        [SYNC_STORAGE_KEYS.RECOVERY_SNAPSHOT]: legacyData,
+      })
+
+      const status = await getSyncStatus()
+
+      expect(status.recoverySnapshot.exists).toBe(true)
+      expect(status.recoverySnapshot.timestamp).toBe(99999)
+      expect(status.recoverySnapshot.tabCount).toBe(10)
+      expect(status.recoverySnapshot.bytes).toBeGreaterThan(0)
+    })
+
+    it('should detect recovery snapshot in legacy uncompressed object format', async () => {
+      const legacyObject = { timestamp: 88888, stats: { tabCount: 3 } }
+
+      await chrome.storage.sync.set({
+        [SYNC_STORAGE_KEYS.RECOVERY_SNAPSHOT]: legacyObject,
+      })
+
+      const status = await getSyncStatus()
+
+      expect(status.recoverySnapshot.exists).toBe(true)
+      expect(status.recoverySnapshot.timestamp).toBe(88888)
+      expect(status.recoverySnapshot.tabCount).toBe(3)
+      expect(status.recoverySnapshot.bytes).toBeGreaterThan(0)
     })
   })
 

@@ -5,7 +5,8 @@
  */
 
 import { describe, it, expect, beforeEach, vi, afterEach } from 'vitest'
-import { resetMockChrome, addMockWindow, addMockTab, addMockTabGroup } from '../mocks/chrome'
+import { compressToUTF16 } from 'lz-string'
+import { resetMockChrome, addMockWindow, addMockTab, addMockTabGroup, getMockTabGroups } from '../mocks/chrome'
 import {
   recoverySnapshotSync,
   recoverySnapshotsStorage,
@@ -235,6 +236,61 @@ describe('recoverySnapshotSync', () => {
       expect(result).toBeNull()
     })
 
+    it('should handle missing chunk gracefully (returns null)', async () => {
+      // Set up chunked metadata indicating 2 chunks, but only save 1 chunk
+      await chrome.storage.sync.set({
+        [SYNC_CHUNK_CONFIG.CHUNK_COUNT_KEY]: {
+          chunkCount: 2,
+          timestamp: Date.now(),
+          tabCount: 5,
+        },
+        [`${SYNC_CHUNK_CONFIG.CHUNK_PREFIX}0`]: 'some-data',
+        // Deliberately omit chunk 1
+      })
+
+      const result = await recoverySnapshotSync.get()
+      expect(result).toBeNull()
+    })
+
+    it('should handle decompression failure (returns null)', async () => {
+      // Set up valid chunk metadata but with garbage chunk data
+      await chrome.storage.sync.set({
+        [SYNC_CHUNK_CONFIG.CHUNK_COUNT_KEY]: {
+          chunkCount: 1,
+          timestamp: Date.now(),
+          tabCount: 1,
+        },
+        [`${SYNC_CHUNK_CONFIG.CHUNK_PREFIX}0`]: 'this-is-not-valid-lz-compressed-data',
+      })
+
+      const result = await recoverySnapshotSync.get()
+      expect(result).toBeNull()
+    })
+
+    it('should handle legacy uncompressed object format', async () => {
+      // Store a raw object (not compressed string) at the legacy key
+      const legacyObject = {
+        id: 'recovery:legacy-obj',
+        timestamp: 888888,
+        windows: [
+          {
+            id: 'win1',
+            tabs: [{ id: 'tab1', url: 'https://legacy-obj.com', title: 'Legacy Obj', index: 0, pinned: false }],
+            tabGroups: [],
+          },
+        ],
+        stats: { windowCount: 1, tabCount: 1, groupCount: 0 },
+      }
+
+      await chrome.storage.sync.set({ [SYNC_STORAGE_KEYS.RECOVERY_SNAPSHOT]: legacyObject })
+
+      const retrieved = await recoverySnapshotSync.get()
+      expect(retrieved).not.toBeNull()
+      expect(retrieved!.id).toBe('recovery:legacy-obj')
+      expect(retrieved!.timestamp).toBe(888888)
+      expect(retrieved!.windows[0].tabs[0].url).toBe('https://legacy-obj.com')
+    })
+
     it('should handle legacy single-item format', async () => {
       // Manually set a legacy format snapshot
       const { compressToUTF16 } = await import('lz-string')
@@ -292,6 +348,29 @@ describe('recoverySnapshotSync', () => {
       const size = await recoverySnapshotSync.getSize()
       expect(size).toBe(0)
     })
+
+    it('should calculate size for legacy compressed string format', async () => {
+      const legacyData = {
+        id: 'recovery:legacy-size',
+        timestamp: 666666,
+        windows: [
+          {
+            id: 'win1',
+            tabs: [
+              { id: 'tab1', url: 'https://example.com', title: 'Example', index: 0, pinned: false },
+            ],
+            tabGroups: [],
+          },
+        ],
+        stats: { windowCount: 1, tabCount: 1, groupCount: 0 },
+      }
+
+      const compressed = compressToUTF16(JSON.stringify(legacyData))
+      await chrome.storage.sync.set({ [SYNC_STORAGE_KEYS.RECOVERY_SNAPSHOT]: compressed })
+
+      const size = await recoverySnapshotSync.getSize()
+      expect(size).toBeGreaterThan(0)
+    })
   })
 
   describe('getMetadata', () => {
@@ -321,6 +400,33 @@ describe('recoverySnapshotSync', () => {
     it('should return null when no snapshot exists', async () => {
       const meta = await recoverySnapshotSync.getMetadata()
       expect(meta).toBeNull()
+    })
+
+    it('should handle legacy compressed string format', async () => {
+      const legacyData = {
+        id: 'recovery:legacy-meta',
+        timestamp: 777777,
+        windows: [
+          {
+            id: 'win1',
+            tabs: [
+              { id: 'tab1', url: 'https://a.com', title: 'A', index: 0, pinned: false },
+              { id: 'tab2', url: 'https://b.com', title: 'B', index: 1, pinned: false },
+            ],
+            tabGroups: [],
+          },
+        ],
+        stats: { windowCount: 1, tabCount: 2, groupCount: 0 },
+      }
+
+      const compressed = compressToUTF16(JSON.stringify(legacyData))
+      await chrome.storage.sync.set({ [SYNC_STORAGE_KEYS.RECOVERY_SNAPSHOT]: compressed })
+
+      const meta = await recoverySnapshotSync.getMetadata()
+      expect(meta).not.toBeNull()
+      expect(meta!.timestamp).toBe(777777)
+      expect(meta!.tabCount).toBe(2)
+      expect(meta!.chunkCount).toBe(1)
     })
   })
 
@@ -684,6 +790,69 @@ describe('restoreFromSnapshot', () => {
 
     expect(result).not.toBeNull()
     expect(result!.windowsCreated).toBe(2)
+    expect(result!.tabsCreated).toBe(2)
+  })
+
+  it('should restore tab groups with title, color, and collapsed state', async () => {
+    const snapshot: RecoverySnapshot = {
+      id: 'recovery:group-test',
+      timestamp: Date.now(),
+      windows: [{
+        id: 'win1',
+        tabs: [
+          { id: 'tab1', url: 'https://a.com', title: 'A', index: 0, pinned: false, groupId: 'g1' },
+          { id: 'tab2', url: 'https://b.com', title: 'B', index: 1, pinned: false, groupId: 'g1' },
+          { id: 'tab3', url: 'https://c.com', title: 'C', index: 2, pinned: false },
+        ],
+        tabGroups: [{ id: 'g1', title: 'Work', color: 'blue', collapsed: true }],
+        focused: true,
+        state: 'normal',
+      }],
+      stats: { windowCount: 1, tabCount: 3, groupCount: 1 },
+    }
+    await recoverySnapshotsStorage.save(snapshot)
+
+    const result = await restoreFromSnapshot('recovery:group-test')
+
+    expect(result).not.toBeNull()
+    expect(result!.windowsCreated).toBe(1)
+    expect(result!.tabsCreated).toBe(3)
+
+    // Verify the tab group was created with correct properties
+    const groups = getMockTabGroups()
+    expect(groups.length).toBeGreaterThanOrEqual(1)
+    const workGroup = groups.find(g => g.title === 'Work')
+    expect(workGroup).toBeDefined()
+    expect(workGroup!.color).toBe('blue')
+    expect(workGroup!.collapsed).toBe(true)
+  })
+
+  it('should handle tab group creation failure gracefully', async () => {
+    const snapshot: RecoverySnapshot = {
+      id: 'recovery:group-fail',
+      timestamp: Date.now(),
+      windows: [{
+        id: 'win1',
+        tabs: [
+          { id: 'tab1', url: 'https://a.com', title: 'A', index: 0, pinned: false, groupId: 'g1' },
+          { id: 'tab2', url: 'https://b.com', title: 'B', index: 1, pinned: false },
+        ],
+        tabGroups: [{ id: 'g1', title: 'Broken', color: 'red', collapsed: false }],
+        focused: true,
+        state: 'normal',
+      }],
+      stats: { windowCount: 1, tabCount: 2, groupCount: 1 },
+    }
+    await recoverySnapshotsStorage.save(snapshot)
+
+    // Make chrome.tabs.group throw an error
+    vi.mocked(chrome.tabs.group).mockRejectedValueOnce(new Error('Group creation failed'))
+
+    const result = await restoreFromSnapshot('recovery:group-fail')
+
+    // Should still succeed for the rest (window + tabs created)
+    expect(result).not.toBeNull()
+    expect(result!.windowsCreated).toBe(1)
     expect(result!.tabsCreated).toBe(2)
   })
 

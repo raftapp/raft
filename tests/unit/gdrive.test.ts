@@ -14,6 +14,8 @@ import {
   listSessionFiles,
   uploadManifest,
   downloadManifest,
+  uploadKeyData,
+  downloadKeyData,
   uploadSession,
   downloadSession,
   deleteSession,
@@ -324,6 +326,94 @@ describe('gdrive provider', () => {
       const result = await downloadManifest(accessToken)
 
       expect(result).toEqual(manifest)
+    })
+  })
+
+  describe('uploadKeyData', () => {
+    it('should upload key data to Drive', async () => {
+      const keyData = {
+        salt: 'test-salt-base64',
+        verificationHash: 'test-hash-abc123',
+      }
+
+      // uploadFile checks for existing file (driveRequest search)
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        status: 200,
+        json: async () => ({ files: [] }),
+      })
+
+      // Create file response (multipart upload via fetch)
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        status: 200,
+        json: async () => ({ id: 'keydata-file-id' }),
+      })
+
+      await uploadKeyData(accessToken, keyData)
+
+      expect(mockFetch).toHaveBeenCalledTimes(2)
+
+      // The second call is the multipart upload to create the file
+      const createCall = mockFetch.mock.calls[1]
+      expect(createCall[0]).toContain('uploadType=multipart')
+      expect(createCall[1].method).toBe('POST')
+      expect(createCall[1].body).toContain(GDRIVE_API.KEYDATA_FILE)
+      expect(createCall[1].body).toContain('"salt":"test-salt-base64"')
+      expect(createCall[1].body).toContain('"verificationHash":"test-hash-abc123"')
+    })
+  })
+
+  describe('downloadKeyData', () => {
+    it('should download key data from Drive', async () => {
+      const keyData = {
+        salt: 'test-salt-base64',
+        verificationHash: 'test-hash-abc123',
+      }
+
+      // findFile search via driveRequest — file exists
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        status: 200,
+        json: async () => ({
+          files: [{ id: 'keydata-file-id', name: GDRIVE_API.KEYDATA_FILE }],
+        }),
+      })
+
+      // downloadFile — direct fetch returning the key data content
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        status: 200,
+        text: async () => JSON.stringify(keyData),
+      })
+
+      const result = await downloadKeyData(accessToken)
+
+      expect(result).toEqual(keyData)
+
+      // Verify the search called the files endpoint with the keydata filename
+      const searchCall = mockFetch.mock.calls[0]
+      expect(searchCall[0]).toContain(encodeURIComponent(GDRIVE_API.KEYDATA_FILE))
+      expect(searchCall[1].headers.Authorization).toBe(`Bearer ${accessToken}`)
+
+      // Verify the download call fetched the correct file
+      const downloadCall = mockFetch.mock.calls[1]
+      expect(downloadCall[0]).toContain('keydata-file-id')
+      expect(downloadCall[0]).toContain('alt=media')
+    })
+
+    it('should return null when key data is not found', async () => {
+      // findFile search via driveRequest — no files
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        status: 200,
+        json: async () => ({ files: [] }),
+      })
+
+      const result = await downloadKeyData(accessToken)
+
+      expect(result).toBeNull()
+      expect(mockFetch).toHaveBeenCalledTimes(1)
     })
   })
 

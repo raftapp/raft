@@ -15,7 +15,10 @@ import {
 import {
   canSuspendTab,
   suspendTab,
+  suspendOtherTabs,
+  suspendAllTabs,
   checkForInactiveTabs,
+  getWindowTabsStatus,
   getTabCounts,
   restoreAllTabs,
 } from '@/background/suspension'
@@ -628,5 +631,197 @@ describe('getTabCounts', () => {
     expect(counts.total).toBe(0)
     expect(counts.suspended).toBe(0)
     expect(counts.suspendable).toBe(0)
+  })
+})
+
+describe('suspendOtherTabs', () => {
+  it('should suspend non-active tabs in specified window', async () => {
+    const win = addMockWindow({ id: 10, focused: true })
+
+    addMockTab({
+      id: 101,
+      windowId: win.id,
+      url: 'https://active-tab.com',
+      title: 'Active Tab',
+      active: true,
+      pinned: false,
+      audible: false,
+    })
+    addMockTab({
+      id: 102,
+      windowId: win.id,
+      url: 'https://background-tab-1.com',
+      title: 'Background 1',
+      active: false,
+      pinned: false,
+      audible: false,
+    })
+    addMockTab({
+      id: 103,
+      windowId: win.id,
+      url: 'https://background-tab-2.com',
+      title: 'Background 2',
+      active: false,
+      pinned: false,
+      audible: false,
+    })
+
+    const count = await suspendOtherTabs(win.id)
+
+    expect(count).toBe(2)
+
+    const tabs = getMockTabs()
+    // Active tab should NOT be discarded
+    expect(tabs.find((t) => t.id === 101)?.discarded).toBe(false)
+    // Non-active tabs should be discarded
+    expect(tabs.find((t) => t.id === 102)?.discarded).toBe(true)
+    expect(tabs.find((t) => t.id === 103)?.discarded).toBe(true)
+  })
+})
+
+describe('suspendAllTabs', () => {
+  it('should suspend all tabs including active (switch-then-suspend path)', async () => {
+    const win = addMockWindow({ id: 20, focused: true })
+
+    addMockTab({
+      id: 201,
+      windowId: win.id,
+      url: 'https://tab-one.com',
+      title: 'Tab One',
+      active: true,
+      pinned: false,
+      audible: false,
+    })
+    addMockTab({
+      id: 202,
+      windowId: win.id,
+      url: 'https://tab-two.com',
+      title: 'Tab Two',
+      active: false,
+      pinned: false,
+      audible: false,
+    })
+
+    const count = await suspendAllTabs()
+
+    expect(count).toBe(2)
+
+    const tabs = getMockTabs()
+    expect(tabs.find((t) => t.id === 201)?.discarded).toBe(true)
+    expect(tabs.find((t) => t.id === 202)?.discarded).toBe(true)
+  })
+
+  it('should skip windows with no tabs', async () => {
+    // Create a window with no tabs
+    addMockWindow({ id: 30, focused: true })
+
+    // This should not throw
+    const count = await suspendAllTabs()
+
+    expect(count).toBe(0)
+  })
+})
+
+describe('getWindowTabsStatus', () => {
+  it('should return status for all tabs in window', async () => {
+    const win = addMockWindow({ id: 40, focused: true })
+
+    // Normal suspendable tab
+    addMockTab({
+      id: 401,
+      windowId: win.id,
+      url: 'https://normal.com',
+      title: 'Normal',
+      active: false,
+      pinned: false,
+      audible: false,
+      discarded: false,
+    })
+
+    // Already discarded tab
+    addMockTab({
+      id: 402,
+      windowId: win.id,
+      url: 'https://discarded.com',
+      title: 'Discarded',
+      active: false,
+      pinned: false,
+      audible: false,
+      discarded: true,
+    })
+
+    // Pinned tab (protected by default settings)
+    addMockTab({
+      id: 403,
+      windowId: win.id,
+      url: 'https://pinned.com',
+      title: 'Pinned',
+      active: false,
+      pinned: true,
+      audible: false,
+      discarded: false,
+    })
+
+    // Audible tab (protected by default settings)
+    addMockTab({
+      id: 404,
+      windowId: win.id,
+      url: 'https://audible.com',
+      title: 'Audible',
+      active: false,
+      pinned: false,
+      audible: true,
+      discarded: false,
+    })
+
+    const results = await getWindowTabsStatus(win.id)
+
+    expect(results).toHaveLength(4)
+
+    // Normal tab: can suspend
+    const normalStatus = results.find((r) => r.tab.id === 401)
+    expect(normalStatus?.canSuspend).toBe(true)
+    expect(normalStatus?.reason).toBeUndefined()
+
+    // Discarded tab: already discarded
+    const discardedStatus = results.find((r) => r.tab.id === 402)
+    expect(discardedStatus?.canSuspend).toBe(false)
+    expect(discardedStatus?.reason).toBe('Already discarded')
+
+    // Pinned tab: protected
+    const pinnedStatus = results.find((r) => r.tab.id === 403)
+    expect(pinnedStatus?.canSuspend).toBe(false)
+    expect(pinnedStatus?.reason).toBe('Pinned tab')
+
+    // Audible tab: protected
+    const audibleStatus = results.find((r) => r.tab.id === 404)
+    expect(audibleStatus?.canSuspend).toBe(false)
+    expect(audibleStatus?.reason).toBe('Playing audio')
+  })
+})
+
+describe('matchesWhitelist (via canSuspendTab)', () => {
+  it('should handle invalid regex patterns gracefully', async () => {
+    const tab = {
+      id: 1,
+      url: 'https://example.com',
+      pinned: false,
+      audible: false,
+      discarded: false,
+    } as chrome.tabs.Tab
+
+    const settings: Settings = {
+      ...DEFAULT_SETTINGS,
+      suspension: {
+        ...DEFAULT_SETTINGS.suspension,
+        whitelist: ['[invalid(regex'],
+      },
+    }
+
+    // Should not throw and should not match (tab remains suspendable)
+    const result = await canSuspendTab(tab, settings)
+
+    expect(result.canSuspend).toBe(true)
+    expect(result.reason).toBeUndefined()
   })
 })

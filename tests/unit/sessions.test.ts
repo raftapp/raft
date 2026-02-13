@@ -5,7 +5,7 @@
  * Tab groups must be preserved perfectly - this is where competitors fail.
  */
 
-import { describe, it, expect, beforeEach } from 'vitest'
+import { describe, it, expect, beforeEach, vi } from 'vitest'
 import {
   setMockStorage,
   getMockStorage,
@@ -15,6 +15,7 @@ import {
   getMockWindows,
   getMockTabs,
   getMockTabGroups,
+  resetMockChrome,
 } from '../mocks/chrome'
 import {
   captureCurrentSession,
@@ -24,9 +25,27 @@ import {
   searchSessions,
   getSessionStats,
   performAutoSave,
+  renameSession,
+  deleteSession,
 } from '@/background/sessions'
 import { STORAGE_KEYS, MAX_SESSIONS } from '@/shared/constants'
 import type { Session } from '@/shared/types'
+import { removeSessionFromSync, backupSession } from '@/shared/syncBackup'
+
+vi.mock('@/shared/syncBackup', () => ({
+  backupSession: vi.fn().mockResolvedValue(true),
+  removeSessionFromSync: vi.fn().mockResolvedValue(undefined),
+}))
+vi.mock('@/shared/cloudSync', () => ({
+  syncEngine: {
+    isConfigured: vi.fn().mockResolvedValue(false),
+    pushSession: vi.fn().mockResolvedValue(undefined),
+    deleteSessionFromCloud: vi.fn().mockResolvedValue(undefined),
+  },
+  cloudSyncSettingsStorage: {
+    get: vi.fn().mockResolvedValue({ enabled: false, intervalMinutes: 15, syncOnSave: true }),
+  },
+}))
 
 describe('captureCurrentSession', () => {
   it('should capture all windows and tabs', async () => {
@@ -651,5 +670,235 @@ describe('performAutoSave', () => {
 
     // Oldest auto-save should be removed
     expect(autoSaves.find((s) => s.id === 'auto-1')).toBeUndefined()
+  })
+})
+
+describe('renameSession', () => {
+  it('should rename session and update timestamp', async () => {
+    const now = Date.now()
+    const session: Session = {
+      id: 'rename-me',
+      name: 'Old Name',
+      createdAt: now - 10000,
+      updatedAt: now - 10000,
+      windows: [],
+      source: 'manual',
+    }
+    setMockStorage({ [STORAGE_KEYS.SESSIONS]: [session] })
+
+    await renameSession('rename-me', 'New Name')
+
+    const stored = getMockStorage()[STORAGE_KEYS.SESSIONS] as Session[]
+    expect(stored).toHaveLength(1)
+    expect(stored[0].name).toBe('New Name')
+    expect(stored[0].updatedAt).toBeGreaterThan(now - 10000)
+  })
+
+  it('should throw for non-existent session', async () => {
+    setMockStorage({ [STORAGE_KEYS.SESSIONS]: [] })
+
+    await expect(renameSession('bogus-id', 'Whatever')).rejects.toThrow('Session not found')
+  })
+
+  it('should throw for empty/whitespace name', async () => {
+    const session: Session = {
+      id: 'rename-empty',
+      name: 'Has Name',
+      createdAt: Date.now(),
+      updatedAt: Date.now(),
+      windows: [],
+      source: 'manual',
+    }
+    setMockStorage({ [STORAGE_KEYS.SESSIONS]: [session] })
+
+    await expect(renameSession('rename-empty', '   ')).rejects.toThrow(
+      'Session name cannot be empty'
+    )
+  })
+})
+
+describe('deleteSession', () => {
+  it('should delete session and remove from sync backup', async () => {
+    const session: Session = {
+      id: 'delete-me',
+      name: 'Delete Me',
+      createdAt: Date.now(),
+      updatedAt: Date.now(),
+      windows: [],
+      source: 'manual',
+    }
+    setMockStorage({ [STORAGE_KEYS.SESSIONS]: [session] })
+
+    await deleteSession('delete-me')
+
+    const stored = getMockStorage()[STORAGE_KEYS.SESSIONS] as Session[]
+    expect(stored.find((s) => s.id === 'delete-me')).toBeUndefined()
+    expect(vi.mocked(removeSessionFromSync)).toHaveBeenCalledWith('delete-me')
+  })
+})
+
+describe('restoreSession — edge cases', () => {
+  it('should handle window creation failure gracefully', async () => {
+    const session: Session = {
+      id: 'fail-window',
+      name: 'Fail Window',
+      createdAt: Date.now(),
+      updatedAt: Date.now(),
+      windows: [
+        {
+          id: 'win-ok',
+          tabs: [{ id: 't1', url: 'https://ok.com', title: 'OK', index: 0, pinned: false }],
+          tabGroups: [],
+          focused: true,
+          state: 'normal',
+        },
+        {
+          id: 'win-fail',
+          tabs: [{ id: 't2', url: 'https://fail.com', title: 'Fail', index: 0, pinned: false }],
+          tabGroups: [],
+          focused: false,
+          state: 'normal',
+        },
+      ],
+      source: 'manual',
+    }
+
+    setMockStorage({ [STORAGE_KEYS.SESSIONS]: [session] })
+
+    // Make windows.create fail on the second call
+    let callCount = 0
+    vi.mocked(chrome.windows.create).mockImplementation(async (createData) => {
+      callCount++
+      if (callCount === 2) {
+        throw new Error('Window creation failed')
+      }
+      // Default mock behavior for the first call
+      const win = addMockWindow({
+        focused: createData?.focused ?? true,
+        state: createData?.state,
+      })
+      if (createData?.url) {
+        const urls = Array.isArray(createData.url) ? createData.url : [createData.url]
+        for (const url of urls) {
+          addMockTab({ windowId: win.id, url, active: true })
+        }
+      }
+      return { ...win, tabs: win.tabs.map((t) => ({ ...t })) } as chrome.windows.Window
+    })
+
+    const result = await restoreSession('fail-window')
+
+    expect(result.windowsCreated).toBe(1)
+    expect(result.windowsFailed).toBe(1)
+    expect(result.errors).toHaveLength(1)
+    expect(result.errors[0]).toContain('Failed to create window')
+  })
+
+  it('should join first tab to existing group via groupIdMap', async () => {
+    // Session where both tabs belong to the same group.
+    // Tab at index 1 gets created first (after the window), creating the group.
+    // Then the first tab (index 0) should join the already-created group.
+    const session: Session = {
+      id: 'group-join',
+      name: 'Group Join',
+      createdAt: Date.now(),
+      updatedAt: Date.now(),
+      windows: [
+        {
+          id: 'win-1',
+          tabs: [
+            { id: 't1', url: 'https://first.com', title: 'First', index: 0, pinned: false, groupId: 'g1' },
+            { id: 't2', url: 'https://second.com', title: 'Second', index: 1, pinned: false, groupId: 'g1' },
+          ],
+          tabGroups: [{ id: 'g1', title: 'MyGroup', color: 'green', collapsed: false }],
+          focused: true,
+          state: 'normal',
+        },
+      ],
+      source: 'manual',
+    }
+
+    setMockStorage({ [STORAGE_KEYS.SESSIONS]: [session] })
+
+    await restoreSession('group-join')
+
+    const tabs = getMockTabs()
+    const groups = getMockTabGroups()
+
+    // Both tabs should be in the same group
+    expect(groups).toHaveLength(1)
+    expect(groups[0].title).toBe('MyGroup')
+    expect(groups[0].color).toBe('green')
+
+    // Both tabs should have the same groupId
+    const groupedTabs = tabs.filter((t) => t.groupId !== -1)
+    expect(groupedTabs).toHaveLength(2)
+    expect(groupedTabs[0].groupId).toBe(groupedTabs[1].groupId)
+  })
+})
+
+describe('performAutoSave — MAX_SESSIONS eviction', () => {
+  it('should evict oldest manual session when no auto-saves exist', async () => {
+    // Fill storage to MAX_SESSIONS with all manual sessions
+    const sessions: Session[] = []
+    for (let i = 0; i < MAX_SESSIONS; i++) {
+      sessions.push({
+        id: `manual-${i}`,
+        name: `Manual ${i}`,
+        createdAt: i * 1000,
+        updatedAt: i * 1000,
+        windows: [
+          {
+            id: `w-${i}`,
+            tabs: [
+              { id: `t-${i}`, url: `https://site${i}.com`, title: `Site ${i}`, index: 0, pinned: false },
+            ],
+            tabGroups: [],
+          },
+        ],
+        source: 'manual',
+      })
+    }
+
+    setMockStorage({
+      [STORAGE_KEYS.SETTINGS]: {
+        autoSave: { enabled: true, intervalMinutes: 60, maxSlots: 5 },
+      },
+      [STORAGE_KEYS.SESSIONS]: sessions,
+    })
+
+    addMockWindow({ id: 1 })
+    addMockTab({ windowId: 1, url: 'https://autosave.com', title: 'Auto' })
+
+    const result = await performAutoSave()
+
+    expect(result).not.toBeNull()
+    expect(result?.source).toBe('auto')
+
+    const stored = getMockStorage()[STORAGE_KEYS.SESSIONS] as Session[]
+    expect(stored).toHaveLength(MAX_SESSIONS)
+
+    // The oldest manual session (manual-0, createdAt=0) should have been evicted
+    expect(stored.find((s) => s.id === 'manual-0')).toBeUndefined()
+
+    // The new auto-save should be present
+    expect(stored.find((s) => s.id === result!.id)).toBeDefined()
+  })
+})
+
+describe('saveSession — sync backup behavior', () => {
+  it('should skip sync backup for auto-save sources', async () => {
+    const session: Session = {
+      id: 'auto-session',
+      name: 'Auto-save',
+      createdAt: Date.now(),
+      updatedAt: Date.now(),
+      windows: [],
+      source: 'auto',
+    }
+
+    await saveSession(session)
+
+    expect(vi.mocked(backupSession)).not.toHaveBeenCalled()
   })
 })

@@ -776,3 +776,220 @@ describe('fixture: Toby', () => {
     expect(result.sessions).toHaveLength(2)
   })
 })
+
+// ============================================================
+// Warning branch coverage tests
+// ============================================================
+
+describe('OneTab parser — warning branches', () => {
+  it('should generate warnings for lines with no URL', () => {
+    const content = `| Just a title with no URL
+https://example.com | Valid Tab`
+
+    const result = parseOneTab(content)
+    expect(result.success).toBe(true)
+    expect(result.warnings.length).toBeGreaterThanOrEqual(1)
+    expect(result.warnings[0].message).toContain('Skipped invalid or protected URL')
+    expect(result.stats.skippedUrls).toBe(1)
+    expect(result.stats.validUrls).toBe(1)
+    // Only the valid tab should remain
+    expect(result.sessions[0].windows[0].tabs).toHaveLength(1)
+    expect(result.sessions[0].windows[0].tabs[0].url).toBe('https://example.com')
+  })
+})
+
+describe('Session Buddy parser — warning branches', () => {
+  it('should generate warnings for tabs with no URL (sessions format)', () => {
+    const content = JSON.stringify({
+      sessions: [{
+        name: 'Test Session',
+        windows: [{
+          tabs: [
+            { url: 'https://example.com', title: 'Valid' },
+            { title: 'No URL tab' },
+          ],
+        }],
+      }],
+    })
+
+    const result = parseSessionBuddy(content)
+    expect(result.success).toBe(true)
+    expect(result.warnings.length).toBeGreaterThanOrEqual(1)
+    expect(result.warnings[0].message).toContain('Skipped tab with no URL')
+    expect(result.stats.skippedUrls).toBe(1)
+    expect(result.sessions[0].windows[0].tabs).toHaveLength(1)
+  })
+
+  it('should generate warnings for links with no URL (collections format)', () => {
+    const content = JSON.stringify({
+      collections: [{
+        title: 'Test Collection',
+        folders: [{
+          links: [
+            { url: 'https://example.com', title: 'Valid' },
+            { title: 'No URL link' },
+          ],
+        }],
+      }],
+    })
+
+    const result = parseSessionBuddy(content)
+    expect(result.success).toBe(true)
+    expect(result.warnings.length).toBeGreaterThanOrEqual(1)
+    expect(result.warnings[0].message).toContain('Skipped link with no URL')
+    expect(result.stats.skippedUrls).toBe(1)
+    expect(result.sessions[0].windows[0].tabs).toHaveLength(1)
+  })
+
+  it('should generate warning for collection with no folders', () => {
+    const content = JSON.stringify({
+      collections: [
+        { title: 'Empty Collection' },
+        { title: 'Valid Collection', folders: [{ links: [{ url: 'https://example.com' }] }] },
+      ],
+    })
+
+    const result = parseSessionBuddy(content)
+    expect(result.success).toBe(true)
+    expect(result.warnings.length).toBeGreaterThanOrEqual(1)
+    expect(result.warnings[0].message).toContain('has no folders')
+    // Only the valid collection produces a session
+    expect(result.sessions).toHaveLength(1)
+    expect(result.sessions[0].name).toBe('Valid Collection')
+  })
+
+  it('should generate warning for session with no windows', () => {
+    const content = JSON.stringify({
+      sessions: [
+        { name: 'Empty Session' },
+        { name: 'Valid Session', windows: [{ tabs: [{ url: 'https://example.com' }] }] },
+      ],
+    })
+
+    const result = parseSessionBuddy(content)
+    expect(result.success).toBe(true)
+    expect(result.warnings.length).toBeGreaterThanOrEqual(1)
+    expect(result.warnings[0].message).toContain('has no windows')
+    // Only the valid session produces a result
+    expect(result.sessions).toHaveLength(1)
+    expect(result.sessions[0].name).toBe('Valid Session')
+  })
+})
+
+describe('Tab Session Manager parser — warning branches', () => {
+  it('should generate warnings for tabs with no URL', () => {
+    const content = JSON.stringify([{
+      name: 'Test Session',
+      windows: [{
+        tabs: [
+          { url: 'https://example.com', title: 'Valid' },
+          { title: 'No URL tab' },
+        ],
+      }],
+    }])
+
+    const result = parseTabSessionManager(content)
+    expect(result.success).toBe(true)
+    expect(result.warnings.length).toBeGreaterThanOrEqual(1)
+    expect(result.warnings[0].message).toContain('Skipped tab with no URL')
+    expect(result.stats.skippedUrls).toBe(1)
+    expect(result.sessions[0].windows[0].tabs).toHaveLength(1)
+  })
+
+  it('should generate warning for session with no windows', () => {
+    const content = JSON.stringify([
+      { name: 'Empty Session' },
+      { name: 'Valid Session', windows: [{ tabs: [{ url: 'https://example.com' }] }] },
+    ])
+
+    const result = parseTabSessionManager(content)
+    expect(result.success).toBe(true)
+    expect(result.warnings.length).toBeGreaterThanOrEqual(1)
+    expect(result.warnings[0].message).toContain('has no windows')
+    // Only the valid session produces a result
+    expect(result.sessions).toHaveLength(1)
+    expect(result.sessions[0].name).toBe('Valid Session')
+  })
+})
+
+describe('Toby parser — warning branches', () => {
+  it('should generate warnings for cards with no URL', () => {
+    const content = JSON.stringify({
+      lists: [{
+        title: 'Test List',
+        cards: [
+          { url: 'https://example.com', title: 'Valid' },
+          { title: 'No URL card' },
+        ],
+      }],
+    })
+
+    const result = parseToby(content)
+    expect(result.success).toBe(true)
+    expect(result.warnings.length).toBeGreaterThanOrEqual(1)
+    expect(result.warnings[0].message).toContain('Skipped card with no URL')
+    expect(result.stats.skippedUrls).toBe(1)
+    expect(result.sessions[0].windows[0].tabs).toHaveLength(1)
+  })
+
+  it('should generate warning for list with no cards', () => {
+    const content = JSON.stringify({
+      lists: [
+        { title: 'Empty List', cards: [] },
+        { title: 'Valid List', cards: [{ url: 'https://example.com', title: 'Valid' }] },
+      ],
+    })
+
+    const result = parseToby(content)
+    expect(result.success).toBe(true)
+    // Empty cards array means tabs.length === 0, so no session is created,
+    // but no warning is generated for an empty array (only for missing cards).
+    // Only the Valid List produces a session.
+    expect(result.sessions).toHaveLength(1)
+    expect(result.sessions[0].name).toBe('Valid List')
+  })
+
+  it('should generate warning for list with missing cards property', () => {
+    const content = JSON.stringify({
+      lists: [
+        { title: 'No Cards Property' },
+        { title: 'Valid List', cards: [{ url: 'https://example.com', title: 'Valid' }] },
+      ],
+    })
+
+    const result = parseToby(content)
+    expect(result.success).toBe(true)
+    expect(result.warnings.length).toBeGreaterThanOrEqual(1)
+    expect(result.warnings[0].message).toContain('has no cards')
+    expect(result.sessions).toHaveLength(1)
+    expect(result.sessions[0].name).toBe('Valid List')
+  })
+})
+
+describe('Raft parser — warning branches', () => {
+  it('should generate warning for session with no windows', () => {
+    const content = JSON.stringify({
+      version: '1.0',
+      raftVersion: '0.1.0',
+      exportedAt: 1609459200000,
+      sessions: [
+        { name: 'Empty Session' },
+        {
+          name: 'Valid Session',
+          windows: [{
+            tabs: [{ url: 'https://example.com', title: 'Valid', index: 0, pinned: false }],
+            tabGroups: [],
+          }],
+        },
+      ],
+    })
+
+    const result = parseRaft(content)
+    expect(result.success).toBe(true)
+    expect(result.warnings.length).toBeGreaterThanOrEqual(1)
+    expect(result.warnings[0].message).toContain('has no windows')
+    // Only the valid session produces a result
+    expect(result.sessions).toHaveLength(1)
+    expect(result.sessions[0].name).toBe('Valid Session')
+  })
+})

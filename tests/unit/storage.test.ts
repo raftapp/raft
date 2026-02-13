@@ -5,12 +5,18 @@
  * These are critical for data safety - "Your tabs are safe."
  */
 
-import { describe, it, expect, beforeEach } from 'vitest'
+import { describe, it, expect, beforeEach, vi } from 'vitest'
 import { setMockStorage, getMockStorage } from '../mocks/chrome'
-import { storage, settingsStorage, sessionsStorage, tabActivityStorage } from '@/shared/storage'
+import {
+  storage,
+  settingsStorage,
+  sessionsStorage,
+  tabActivityStorage,
+  foldersStorage,
+} from '@/shared/storage'
 import { STORAGE_KEYS } from '@/shared/constants'
 import { DEFAULT_SETTINGS } from '@/shared/types'
-import type { Session, Settings } from '@/shared/types'
+import type { Session, Settings, Folder } from '@/shared/types'
 
 describe('storage', () => {
   describe('get/set', () => {
@@ -397,6 +403,163 @@ describe('tabActivityStorage', () => {
 
       const activity = getMockStorage()[STORAGE_KEYS.TAB_ACTIVITY] as Record<number, number>
       expect(activity).toEqual({})
+    })
+  })
+
+  describe('touchAndRemove', () => {
+    it('should touch one tab and remove another atomically', async () => {
+      setMockStorage({ [STORAGE_KEYS.TAB_ACTIVITY]: { 10: 1000, 20: 2000, 30: 3000 } })
+
+      const before = Date.now()
+      await tabActivityStorage.touchAndRemove(10, 20)
+      const after = Date.now()
+
+      const activity = getMockStorage()[STORAGE_KEYS.TAB_ACTIVITY] as Record<number, number>
+      // Tab 10 was touched with a fresh timestamp
+      expect(activity[10]).toBeGreaterThanOrEqual(before)
+      expect(activity[10]).toBeLessThanOrEqual(after)
+      // Tab 20 was removed
+      expect(activity[20]).toBeUndefined()
+      // Tab 30 is untouched
+      expect(activity[30]).toBe(3000)
+    })
+  })
+})
+
+describe('sessionsStorage (additional)', () => {
+  const createSession = (overrides: Partial<Session> = {}): Session => ({
+    id: overrides.id ?? 'session-1',
+    name: overrides.name ?? 'Test Session',
+    createdAt: overrides.createdAt ?? Date.now(),
+    updatedAt: overrides.updatedAt ?? Date.now(),
+    windows: overrides.windows ?? [],
+    source: overrides.source ?? 'manual',
+  })
+
+  describe('saveAll', () => {
+    it('should replace the entire sessions array', async () => {
+      // Pre-populate with existing sessions
+      setMockStorage({
+        [STORAGE_KEYS.SESSIONS]: [createSession({ id: 'old-1' }), createSession({ id: 'old-2' })],
+      })
+
+      const newSessions = [
+        createSession({ id: 'new-1', name: 'First' }),
+        createSession({ id: 'new-2', name: 'Second' }),
+        createSession({ id: 'new-3', name: 'Third' }),
+      ]
+
+      await sessionsStorage.saveAll(newSessions)
+
+      const stored = getMockStorage()[STORAGE_KEYS.SESSIONS] as Session[]
+      expect(stored).toHaveLength(3)
+      expect(stored.map((s) => s.id)).toEqual(['new-1', 'new-2', 'new-3'])
+      // Old sessions should be gone
+      expect(stored.find((s) => s.id === 'old-1')).toBeUndefined()
+    })
+
+    it('should throw user-friendly error on quota exceeded', async () => {
+      vi.mocked(chrome.storage.local.set).mockRejectedValueOnce(
+        new Error('QUOTA_BYTES_PER_ITEM quota exceeded')
+      )
+
+      await expect(sessionsStorage.saveAll([createSession()])).rejects.toThrow(
+        'Storage is full. Delete some sessions to free space, or export and remove older sessions.'
+      )
+    })
+
+    it('should re-throw non-quota errors', async () => {
+      vi.mocked(chrome.storage.local.set).mockRejectedValueOnce(new Error('Unexpected failure'))
+
+      await expect(sessionsStorage.saveAll([createSession()])).rejects.toThrow('Unexpected failure')
+    })
+  })
+
+  describe('save (quota errors)', () => {
+    it('should throw user-friendly error when error message contains QUOTA', async () => {
+      vi.mocked(chrome.storage.local.set).mockRejectedValueOnce(
+        new Error('QUOTA_BYTES_PER_ITEM quota exceeded')
+      )
+
+      await expect(sessionsStorage.save(createSession())).rejects.toThrow(
+        'Storage is full. Delete some sessions to free space, or export and remove older sessions.'
+      )
+    })
+
+    it('should throw user-friendly error when error message contains "full"', async () => {
+      vi.mocked(chrome.storage.local.set).mockRejectedValueOnce(
+        new Error('Storage is full')
+      )
+
+      await expect(sessionsStorage.save(createSession())).rejects.toThrow(
+        'Storage is full. Delete some sessions to free space, or export and remove older sessions.'
+      )
+    })
+
+    it('should re-throw non-quota errors unchanged', async () => {
+      vi.mocked(chrome.storage.local.set).mockRejectedValueOnce(
+        new Error('Network disconnected')
+      )
+
+      await expect(sessionsStorage.save(createSession())).rejects.toThrow('Network disconnected')
+    })
+  })
+})
+
+describe('foldersStorage', () => {
+  const createFolder = (overrides: Partial<Folder> = {}): Folder => ({
+    id: overrides.id ?? 'folder-1',
+    name: overrides.name ?? 'Test Folder',
+    createdAt: overrides.createdAt ?? Date.now(),
+    ...overrides,
+  })
+
+  describe('getAll', () => {
+    it('should return empty array when no folders exist', async () => {
+      const folders = await foldersStorage.getAll()
+      expect(folders).toEqual([])
+    })
+  })
+
+  describe('save', () => {
+    it('should create a new folder', async () => {
+      const folder = createFolder({ id: 'new-folder', name: 'My Folder' })
+      await foldersStorage.save(folder)
+
+      const stored = getMockStorage()[STORAGE_KEYS.FOLDERS] as Folder[]
+      expect(stored).toHaveLength(1)
+      expect(stored[0].id).toBe('new-folder')
+      expect(stored[0].name).toBe('My Folder')
+    })
+
+    it('should update an existing folder by ID', async () => {
+      const original = createFolder({ id: 'existing', name: 'Original Name' })
+      setMockStorage({ [STORAGE_KEYS.FOLDERS]: [original] })
+
+      const updated = { ...original, name: 'Updated Name' }
+      await foldersStorage.save(updated)
+
+      const stored = getMockStorage()[STORAGE_KEYS.FOLDERS] as Folder[]
+      expect(stored).toHaveLength(1)
+      expect(stored[0].name).toBe('Updated Name')
+    })
+  })
+
+  describe('delete', () => {
+    it('should remove a folder by ID', async () => {
+      setMockStorage({
+        [STORAGE_KEYS.FOLDERS]: [
+          createFolder({ id: 'keep' }),
+          createFolder({ id: 'remove' }),
+          createFolder({ id: 'also-keep' }),
+        ],
+      })
+
+      await foldersStorage.delete('remove')
+
+      const stored = getMockStorage()[STORAGE_KEYS.FOLDERS] as Folder[]
+      expect(stored).toHaveLength(2)
+      expect(stored.map((f) => f.id)).toEqual(['keep', 'also-keep'])
     })
   })
 })

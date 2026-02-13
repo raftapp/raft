@@ -1005,7 +1005,7 @@ export function CloudSyncPanel({
 
             <button
               onClick={handleRemoveLicense}
-              class="text-sm text-raft-400 hover:text-raft-600 underline"
+              class="block text-sm text-raft-400 hover:text-raft-600 underline"
             >
               Remove license from this device
             </button>

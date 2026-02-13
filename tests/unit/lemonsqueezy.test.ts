@@ -10,6 +10,7 @@ import { resetMockChrome, setMockStorage, getMockStorage, getMockSyncStorage } f
 import {
   getStoredLicense,
   clearLicense,
+  deactivateLicense,
   restoreLicenseFromSync,
   validateLicense,
   activateLicense,
@@ -56,6 +57,56 @@ describe('lemonsqueezy', () => {
     })
   })
 
+  describe('deactivateLicense', () => {
+    it('should return true on successful deactivation', async () => {
+      mockFetch.mockResolvedValue({
+        ok: true,
+        json: async () => ({
+          deactivated: true,
+          license_key: {
+            id: 1,
+            status: 'active',
+            key: 'KEY-123',
+            activation_usage: 0,
+          },
+        }),
+      })
+
+      const result = await deactivateLicense('KEY-123', 'instance-abc')
+      expect(result).toBe(true)
+      expect(mockFetch).toHaveBeenCalledWith(
+        expect.stringContaining('deactivate'),
+        expect.objectContaining({
+          method: 'POST',
+          body: JSON.stringify({
+            license_key: 'KEY-123',
+            instance_id: 'instance-abc',
+          }),
+        })
+      )
+    })
+
+    it('should return false when API reports failure', async () => {
+      mockFetch.mockResolvedValue({
+        ok: true,
+        json: async () => ({
+          deactivated: false,
+          error: 'Instance not found',
+        }),
+      })
+
+      const result = await deactivateLicense('KEY-123', 'bad-instance')
+      expect(result).toBe(false)
+    })
+
+    it('should return false on network error', async () => {
+      mockFetch.mockRejectedValue(new Error('Network error'))
+
+      const result = await deactivateLicense('KEY-123', 'instance-abc')
+      expect(result).toBe(false)
+    })
+  })
+
   describe('clearLicense', () => {
     it('should remove license from local and sync storage', async () => {
       const license: LicenseData = {
@@ -72,6 +123,69 @@ describe('lemonsqueezy', () => {
       const syncResult = getMockSyncStorage()[LICENSE_STORAGE_KEY]
       expect(localResult).toBeUndefined()
       expect(syncResult).toBeUndefined()
+    })
+
+    it('should call deactivate API before clearing storage', async () => {
+      const license: LicenseData = {
+        key: 'KEY-TO-DEACTIVATE',
+        status: 'active',
+        validatedAt: Date.now(),
+        instanceId: 'instance-xyz',
+      }
+      await chrome.storage.local.set({ [LICENSE_STORAGE_KEY]: license })
+      await chrome.storage.sync.set({ [LICENSE_STORAGE_KEY]: license })
+
+      mockFetch.mockResolvedValue({
+        ok: true,
+        json: async () => ({ deactivated: true }),
+      })
+
+      await clearLicense()
+
+      expect(mockFetch).toHaveBeenCalledWith(
+        expect.stringContaining('deactivate'),
+        expect.objectContaining({
+          body: JSON.stringify({
+            license_key: 'KEY-TO-DEACTIVATE',
+            instance_id: 'instance-xyz',
+          }),
+        })
+      )
+      expect(getMockStorage()[LICENSE_STORAGE_KEY]).toBeUndefined()
+      expect(getMockSyncStorage()[LICENSE_STORAGE_KEY]).toBeUndefined()
+    })
+
+    it('should still clear storage when deactivate API fails', async () => {
+      const license: LicenseData = {
+        key: 'KEY-FAIL-DEACTIVATE',
+        status: 'active',
+        validatedAt: Date.now(),
+        instanceId: 'instance-fail',
+      }
+      await chrome.storage.local.set({ [LICENSE_STORAGE_KEY]: license })
+      await chrome.storage.sync.set({ [LICENSE_STORAGE_KEY]: license })
+
+      mockFetch.mockRejectedValue(new Error('Network error'))
+
+      await clearLicense()
+
+      expect(getMockStorage()[LICENSE_STORAGE_KEY]).toBeUndefined()
+      expect(getMockSyncStorage()[LICENSE_STORAGE_KEY]).toBeUndefined()
+    })
+
+    it('should skip API call when no instanceId exists', async () => {
+      const license: LicenseData = {
+        key: 'KEY-NO-INSTANCE',
+        status: 'active',
+        validatedAt: Date.now(),
+        // no instanceId
+      }
+      await chrome.storage.local.set({ [LICENSE_STORAGE_KEY]: license })
+
+      await clearLicense()
+
+      expect(mockFetch).not.toHaveBeenCalled()
+      expect(getMockStorage()[LICENSE_STORAGE_KEY]).toBeUndefined()
     })
   })
 

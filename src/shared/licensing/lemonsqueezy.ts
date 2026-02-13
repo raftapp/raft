@@ -116,9 +116,44 @@ async function saveLicense(license: LicenseData): Promise<void> {
 }
 
 /**
- * Clear stored license
+ * Deactivate a license instance with Lemon Squeezy API (best-effort)
+ */
+export async function deactivateLicense(licenseKey: string, instanceId: string): Promise<boolean> {
+  try {
+    const response = await fetch(LEMONSQUEEZY.DEACTIVATE_URL, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Accept: 'application/json',
+      },
+      body: JSON.stringify({
+        license_key: licenseKey,
+        instance_id: instanceId,
+      }),
+    })
+
+    const data = await response.json()
+
+    if (!data.deactivated) {
+      console.warn('[Raft] License deactivation failed:', data.error)
+      return false
+    }
+
+    return true
+  } catch (err) {
+    console.warn('[Raft] License deactivation error:', err)
+    return false
+  }
+}
+
+/**
+ * Clear stored license (deactivates with Lemon Squeezy first, best-effort)
  */
 export async function clearLicense(): Promise<void> {
+  const stored = await getStoredLicense()
+  if (stored?.key && stored?.instanceId) {
+    await deactivateLicense(stored.key, stored.instanceId)
+  }
   await storage.remove(LICENSE_STORAGE_KEY)
   await chrome.storage.sync.remove(LICENSE_STORAGE_KEY)
 }

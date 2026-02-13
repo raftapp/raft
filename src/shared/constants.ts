@@ -171,6 +171,8 @@ export const LEMONSQUEEZY = {
   VALIDATE_URL: 'https://api.lemonsqueezy.com/v1/licenses/validate',
   /** License activation endpoint */
   ACTIVATE_URL: 'https://api.lemonsqueezy.com/v1/licenses/activate',
+  /** License deactivation endpoint */
+  DEACTIVATE_URL: 'https://api.lemonsqueezy.com/v1/licenses/deactivate',
 } as const
 
 /** License storage key */

@@ -357,6 +357,14 @@ export function CloudSyncPanel({
     }
   }
 
+  const handleRemoveLicense = async () => {
+    if (!confirm('Are you sure you want to remove your license from this device?')) {
+      return
+    }
+    await chrome.runtime.sendMessage({ type: 'PRO_CLEAR_LICENSE' })
+    onProStatusChange()
+  }
+
   const handleSettingChange = async (updates: Partial<CloudSyncSettings>) => {
     const updated = { ...settings, ...updates }
     setSettings(updated)
@@ -859,6 +867,13 @@ export function CloudSyncPanel({
           <p class="text-xs text-raft-400">
             Raft only accesses its own app folder. We cannot see your other Drive files.
           </p>
+
+          <button
+            onClick={handleRemoveLicense}
+            class="text-sm text-raft-400 hover:text-raft-600 underline"
+          >
+            Remove license from this device
+          </button>
         </div>
       ) : (
         // Connected state
@@ -986,6 +1001,13 @@ export function CloudSyncPanel({
               class="text-sm text-raft-600 hover:text-raft-800 underline"
             >
               Generate new recovery key
+            </button>
+
+            <button
+              onClick={handleRemoveLicense}
+              class="text-sm text-raft-400 hover:text-raft-600 underline"
+            >
+              Remove license from this device
             </button>
           </div>
         </div>

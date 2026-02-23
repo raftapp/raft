@@ -130,6 +130,8 @@ export interface SyncState {
   lastSyncAt?: number
   /** Last sync error */
   lastError?: string
+  /** Whether auth tokens are expired/revoked (requires reconnect) */
+  authExpired?: boolean
   /** Number of pending operations */
   pendingCount: number
   /** Current operation description */

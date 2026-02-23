@@ -9,6 +9,19 @@ import type { CloudTokens } from './types'
 import { GOOGLE_OAUTH } from '../constants'
 
 /**
+ * OAuth error with machine-readable error code (e.g., "invalid_grant")
+ */
+export class OAuthError extends Error {
+  constructor(
+    message: string,
+    public readonly errorCode: string
+  ) {
+    super(message)
+    this.name = 'OAuthError'
+  }
+}
+
+/**
  * Result of the OAuth flow
  */
 export interface OAuthResult {
@@ -176,7 +189,10 @@ export async function refreshAccessToken(refreshToken: string): Promise<CloudTok
 
   if (!response.ok) {
     const errorData = await response.json().catch(() => ({}))
-    throw new Error(`Token refresh failed: ${errorData.error_description || response.statusText}`)
+    throw new OAuthError(
+      `Token refresh failed: ${errorData.error_description || response.statusText}`,
+      errorData.error || 'unknown'
+    )
   }
 
   const data = await response.json()

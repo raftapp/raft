@@ -21,11 +21,14 @@ import {
   getValidTokensForDisconnect,
   getEncryptionKeyForSetup,
   setEncryptionKey,
+  clearCachedTokens,
 } from '@/shared/cloudSync/syncEngine'
 import * as gdrive from '@/shared/cloudSync/providers/gdrive'
 import * as syncQueue from '@/shared/cloudSync/syncQueue'
 import * as encryption from '@/shared/cloudSync/encryption'
 import * as oauth from '@/shared/cloudSync/oauth'
+import { OAuthError } from '@/shared/cloudSync/oauth'
+import { DriveApiError } from '@/shared/cloudSync/providers/gdrive'
 import {
   cloudCredentialsStorage,
   encryptionKeyStorage,
@@ -38,10 +41,33 @@ import { CLOUD_SYNC_KEYS } from '@/shared/constants'
 import type { CloudCredentials, EncryptionKeyData, CloudTokens, SyncManifest, SyncSessionMeta } from '@/shared/cloudSync/types'
 import type { Session } from '@/shared/types'
 
-// Mock modules
-vi.mock('@/shared/cloudSync/providers/gdrive')
+// Mock modules (partial mocks to preserve error classes for instanceof checks)
+vi.mock('@/shared/cloudSync/providers/gdrive', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('@/shared/cloudSync/providers/gdrive')>()
+  return {
+    ...actual,
+    downloadManifest: vi.fn(),
+    uploadManifest: vi.fn(),
+    downloadSession: vi.fn(),
+    uploadSession: vi.fn(),
+    deleteSession: vi.fn(),
+    downloadKeyData: vi.fn(),
+    uploadKeyData: vi.fn(),
+    clearAllData: vi.fn(),
+  }
+})
 vi.mock('@/shared/cloudSync/syncQueue')
-vi.mock('@/shared/cloudSync/oauth')
+vi.mock('@/shared/cloudSync/oauth', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('@/shared/cloudSync/oauth')>()
+  return {
+    ...actual,
+    getValidTokens: vi.fn(),
+    refreshAccessToken: vi.fn(),
+    launchGoogleOAuth: vi.fn(),
+    revokeAccess: vi.fn(),
+    tokensNeedRefresh: vi.fn(),
+  }
+})
 
 // Mock fetch for encryption tests
 const mockFetch = vi.fn()
@@ -1096,6 +1122,84 @@ describe('syncEngine - integration scenarios', () => {
 
       expect(isUnlocked()).toBe(true)
       expect(getEncryptionKeyForSetup()).toBe(key)
+    })
+  })
+
+  describe('auth error detection', () => {
+    beforeEach(async () => {
+      await unlock('test-password')
+      vi.mocked(syncQueue.getNextItem).mockResolvedValue(null)
+    })
+
+    it('should set authExpired when OAuthError with invalid_grant is thrown', async () => {
+      vi.mocked(oauth.getValidTokens).mockRejectedValue(
+        new OAuthError('Token has been expired or revoked.', 'invalid_grant')
+      )
+
+      const result = await performFullSync()
+
+      expect(result.success).toBe(false)
+      const state = await syncStateStorage.get()
+      expect(state.authExpired).toBe(true)
+    })
+
+    it('should set authExpired when DriveApiError with 401 is thrown', async () => {
+      // Let tokens pass but fail on the drive call
+      vi.mocked(oauth.getValidTokens).mockResolvedValue(testTokens)
+      vi.mocked(gdrive.downloadManifest).mockRejectedValue(
+        new DriveApiError('Unauthorized', 401)
+      )
+
+      const result = await performFullSync()
+
+      expect(result.success).toBe(false)
+      const state = await syncStateStorage.get()
+      expect(state.authExpired).toBe(true)
+    })
+
+    it('should clear authExpired on successful sync', async () => {
+      // Pre-set authExpired
+      await syncStateStorage.update({ authExpired: true })
+
+      vi.mocked(oauth.getValidTokens).mockResolvedValue(testTokens)
+      vi.mocked(gdrive.downloadManifest).mockResolvedValue(null)
+      vi.mocked(gdrive.uploadManifest).mockResolvedValue()
+
+      const result = await performFullSync()
+
+      expect(result.success).toBe(true)
+      const state = await syncStateStorage.get()
+      expect(state.authExpired).toBe(false)
+    })
+
+    it('should not set authExpired for non-auth errors', async () => {
+      vi.mocked(oauth.getValidTokens).mockResolvedValue(testTokens)
+      vi.mocked(gdrive.downloadManifest).mockRejectedValue(new Error('Network error'))
+
+      const result = await performFullSync()
+
+      expect(result.success).toBe(false)
+      const state = await syncStateStorage.get()
+      expect(state.authExpired).toBeUndefined()
+    })
+
+    it('should include authExpired in getSyncStatus', async () => {
+      await syncStateStorage.update({ authExpired: true })
+
+      const status = await getSyncStatus()
+      expect(status.authExpired).toBe(true)
+    })
+  })
+
+  describe('clearCachedTokens', () => {
+    it('should clear cached tokens so next getTokens re-decrypts', async () => {
+      await unlock('test-password')
+
+      // Calling clearCachedTokens should not throw
+      clearCachedTokens()
+
+      // Engine should still be unlocked (encryption key not cleared)
+      expect(isUnlocked()).toBe(true)
     })
   })
 })

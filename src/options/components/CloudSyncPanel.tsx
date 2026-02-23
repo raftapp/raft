@@ -17,6 +17,7 @@ interface CloudSyncStatus extends SyncState {
   configured: boolean
   enabled: boolean
   unlocked: boolean
+  authExpired?: boolean
   email?: string
 }
 
@@ -39,6 +40,7 @@ export function CloudSyncPanel({
   const [connecting, setConnecting] = useState(false)
   const [syncing, setSyncing] = useState(false)
   const [disconnecting, setDisconnecting] = useState(false)
+  const [reconnecting, setReconnecting] = useState(false)
 
   // Encryption setup flow
   const [showEncryptionSetup, setShowEncryptionSetup] = useState(false)
@@ -354,6 +356,23 @@ export function CloudSyncPanel({
       onError('Sync failed')
     } finally {
       setSyncing(false)
+    }
+  }
+
+  const handleReconnect = async () => {
+    setReconnecting(true)
+    try {
+      const response = await chrome.runtime.sendMessage({ type: 'CLOUD_RECONNECT' })
+      if (response.success) {
+        onSuccess('Reconnected to Google Drive')
+        loadStatus()
+      } else {
+        onError(response.error || 'Reconnect failed')
+      }
+    } catch {
+      onError('Reconnect failed')
+    } finally {
+      setReconnecting(false)
     }
   }
 
@@ -940,7 +959,7 @@ export function CloudSyncPanel({
               </span>
               <button
                 onClick={handleSync}
-                disabled={syncing || status.syncing || !status.unlocked}
+                disabled={syncing || status.syncing || !status.unlocked || reconnecting}
                 class="px-3 py-1 text-sm bg-raft-600 text-white rounded hover:bg-raft-700 disabled:opacity-50"
               >
                 {syncing ? 'Syncing...' : 'Sync Now'}
@@ -954,9 +973,20 @@ export function CloudSyncPanel({
             )}
 
             {status.lastError && (
-              <p role="alert" class="text-xs text-red-600">
-                Last error: {status.lastError}
-              </p>
+              <div class="flex items-center justify-between gap-2">
+                <p role="alert" class="text-xs text-red-600">
+                  Last error: {status.lastError}
+                </p>
+                {status.authExpired && (
+                  <button
+                    onClick={handleReconnect}
+                    disabled={reconnecting}
+                    class="shrink-0 px-3 py-1 text-xs bg-red-600 text-white rounded hover:bg-red-700 disabled:opacity-50"
+                  >
+                    {reconnecting ? 'Reconnecting...' : 'Reconnect'}
+                  </button>
+                )}
+              </div>
             )}
           </div>
 

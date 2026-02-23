@@ -19,6 +19,7 @@
     "test:safety": "vitest run tests/safety/",
     "test:trust-report": "vitest run --reporter=default --reporter=json --outputFile.json=coverage/safety-results.json tests/safety/ && node scripts/generate-trust-report.mjs",
     "prepare": "simple-git-hooks",
+    "postversion": "node scripts/sync-version.mjs && git add manifest.json && git commit --amend --no-edit",
     "version:patch": "npm version patch",
     "version:minor": "npm version minor",
     "version:major": "npm version major"

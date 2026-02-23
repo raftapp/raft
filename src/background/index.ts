@@ -31,6 +31,7 @@ import {
   cloudSyncSettingsStorage,
   cloudCredentialsStorage,
   encryptionKeyStorage,
+  syncStateStorage,
   clearAllCloudSyncData,
   launchGoogleOAuth,
   setupEncryption,
@@ -149,6 +150,7 @@ export type MessageType =
   // Cloud sync messages
   | { type: 'CLOUD_CONNECT' }
   | { type: 'CLOUD_DISCONNECT'; deleteCloudData?: boolean }
+  | { type: 'CLOUD_RECONNECT' }
   | { type: 'CLOUD_SETUP_ENCRYPTION'; password: string; tokens?: CloudTokens; email?: string }
   | { type: 'CLOUD_UNLOCK'; password: string; tokens?: CloudTokens; email?: string }
   | { type: 'CLOUD_REGENERATE_RECOVERY_KEY'; password: string }
@@ -509,7 +511,10 @@ chrome.alarms.onAlarm.addListener(async (alarm) => {
 
     case ALARM_NAMES.CLOUD_SYNC:
       if ((await syncEngine.isConfigured()) && syncEngine.isUnlocked()) {
-        await syncEngine.performFullSync()
+        const syncState = await syncStateStorage.get()
+        if (!syncState.authExpired) {
+          await syncEngine.performFullSync()
+        }
       }
       break
 
@@ -1184,6 +1189,43 @@ async function handleMessage(message: MessageType): Promise<MessageResponse> {
         await chrome.alarms.clear(ALARM_NAMES.CLOUD_SYNC)
 
         return { success: true }
+      }
+
+      case 'CLOUD_RECONNECT': {
+        if (!(await syncEngine.isConfigured())) {
+          return { success: false, error: 'Cloud sync not configured' }
+        }
+        if (!syncEngine.isUnlocked()) {
+          return { success: false, error: 'Cloud sync is locked' }
+        }
+
+        // Launch fresh OAuth flow
+        const reconnectResult = await launchGoogleOAuth()
+
+        // Encrypt new tokens with existing encryption key
+        const reconnectKey = syncEngine.getEncryptionKeyForSetup()
+        if (!reconnectKey) {
+          return { success: false, error: 'Encryption key not available' }
+        }
+
+        const reconnectEncrypted = await encryptObject(reconnectResult.tokens, reconnectKey)
+
+        // Save new credentials, preserving existing connectedAt
+        const existingCreds = await cloudCredentialsStorage.get()
+        await cloudCredentialsStorage.save({
+          provider: 'gdrive',
+          encryptedTokens: JSON.stringify(reconnectEncrypted),
+          email: reconnectResult.email,
+          connectedAt: existingCreds?.connectedAt ?? Date.now(),
+        })
+
+        // Clear cached tokens so sync engine picks up new ones
+        syncEngine.clearCachedTokens()
+
+        // Clear auth error state
+        await syncStateStorage.update({ authExpired: false, lastError: undefined })
+
+        return { success: true, data: { email: reconnectResult.email } }
       }
 
       case 'CLOUD_SYNC': {

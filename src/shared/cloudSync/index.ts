@@ -52,6 +52,7 @@ export {
 
 // OAuth
 export {
+  OAuthError,
   launchGoogleOAuth,
   refreshAccessToken,
   revokeAccess,

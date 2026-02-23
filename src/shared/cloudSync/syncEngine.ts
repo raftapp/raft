@@ -29,7 +29,8 @@ import {
   decrypt,
   createVerificationHash,
 } from './encryption'
-import { getValidTokens } from './oauth'
+import { OAuthError, getValidTokens } from './oauth'
+import { DriveApiError } from './providers/gdrive'
 import * as gdrive from './providers/gdrive'
 import * as syncQueue from './syncQueue'
 import { sessionsStorage } from '../storage'
@@ -63,6 +64,22 @@ function withManifestLock<T>(fn: () => Promise<T>): Promise<T> {
     () => {}
   )
   return result
+}
+
+/**
+ * Check if an error indicates expired/revoked auth tokens
+ */
+function isAuthError(error: unknown): boolean {
+  if (error instanceof OAuthError && error.errorCode === 'invalid_grant') return true
+  if (error instanceof DriveApiError && error.status === 401) return true
+  return false
+}
+
+/**
+ * Clear cached tokens (used after reconnect to force re-decryption of new tokens)
+ */
+export function clearCachedTokens(): void {
+  cachedTokens = null
 }
 
 /** Save the set of cloud-synced session IDs to local storage */
@@ -394,6 +411,7 @@ export async function performFullSync(): Promise<SyncResult> {
       syncing: false,
       lastSyncAt: Date.now(),
       lastError: result.errors.length > 0 ? result.errors[0] : undefined,
+      authExpired: false,
       currentOperation: undefined,
     })
 
@@ -406,6 +424,7 @@ export async function performFullSync(): Promise<SyncResult> {
     await syncStateStorage.update({
       syncing: false,
       lastError: errorMessage,
+      authExpired: isAuthError(error) ? true : undefined,
       currentOperation: undefined,
     })
   }
@@ -472,6 +491,10 @@ export async function pushSession(sessionId: string): Promise<void> {
     })
   } catch (error) {
     console.error('[Raft Sync] Failed to push session:', error)
+    if (isAuthError(error)) {
+      const errorMessage = error instanceof Error ? error.message : String(error)
+      await syncStateStorage.update({ authExpired: true, lastError: errorMessage })
+    }
     await syncQueue.enqueueUpload(sessionId)
   }
 }
@@ -549,6 +572,12 @@ export async function processQueue(): Promise<void> {
 
       await syncQueue.markComplete(item.id)
     } catch (error) {
+      if (isAuthError(error)) {
+        const errorMessage = error instanceof Error ? error.message : String(error)
+        await syncStateStorage.update({ authExpired: true, lastError: errorMessage })
+        await syncQueue.markFailed(item.id, String(error))
+        break
+      }
       await syncQueue.markFailed(item.id, String(error))
     }
 
@@ -566,6 +595,7 @@ export async function getSyncStatus(): Promise<{
   syncing: boolean
   lastSyncAt?: number
   lastError?: string
+  authExpired?: boolean
   pendingCount: number
   email?: string
 }> {
@@ -581,6 +611,7 @@ export async function getSyncStatus(): Promise<{
     syncing: state.syncing,
     lastSyncAt: state.lastSyncAt,
     lastError: state.lastError,
+    authExpired: state.authExpired,
     pendingCount: state.pendingCount,
     email: credentials?.email,
   }

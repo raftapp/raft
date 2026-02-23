@@ -1,6 +1,6 @@
 {
   "name": "raft",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "Keep your tabs safe - Chrome extension for tab suspension and session management",
   "type": "module",
   "scripts": {

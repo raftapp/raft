@@ -680,7 +680,7 @@ describe('suspendOtherTabs', () => {
 })
 
 describe('suspendAllTabs', () => {
-  it('should suspend all tabs including active (switch-then-suspend path)', async () => {
+  it('should suspend non-active tabs and skip active tabs', async () => {
     const win = addMockWindow({ id: 20, focused: true })
 
     addMockTab({
@@ -704,10 +704,11 @@ describe('suspendAllTabs', () => {
 
     const count = await suspendAllTabs()
 
-    expect(count).toBe(2)
+    expect(count).toBe(1)
 
     const tabs = getMockTabs()
-    expect(tabs.find((t) => t.id === 201)?.discarded).toBe(true)
+    // Active tab should NOT be discarded
+    expect(tabs.find((t) => t.id === 201)?.discarded).toBe(false)
     expect(tabs.find((t) => t.id === 202)?.discarded).toBe(true)
   })
 

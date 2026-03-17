@@ -151,23 +151,20 @@ export async function suspendOtherTabs(windowId?: number): Promise<number> {
 }
 
 /**
- * Suspend all tabs across all windows (including active tabs when possible)
+ * Suspend all non-active tabs across all windows.
+ * Active tabs are skipped because chrome.tabs.discard() cannot discard the active tab.
+ * For startup hibernation (which needs to suspend active tabs too), the onStartup
+ * handler opens a Raft page as the active tab first, then uses suspendOtherTabs().
  */
 export async function suspendAllTabs(): Promise<number> {
   const windows = await chrome.windows.getAll({ populate: true })
   const settings = await settingsStorage.get()
-
   let suspended = 0
 
   for (const win of windows) {
     if (!win.id || !win.tabs) continue
-
-    const activeTab = win.tabs.find((t) => t.active)
-    const otherTabs = win.tabs.filter((t) => !t.active)
-
-    // First, suspend all non-active tabs
-    for (const tab of otherTabs) {
-      if (tab.id) {
+    for (const tab of win.tabs) {
+      if (tab.id && !tab.active) {
         const check = await canSuspendTab(tab, settings)
         if (check.canSuspend) {
           const success = await suspendTab(tab.id)
@@ -175,23 +172,9 @@ export async function suspendAllTabs(): Promise<number> {
         }
       }
     }
-
-    // Now handle the active tab if it's suspendable
-    if (activeTab?.id) {
-      const check = await canSuspendTab(activeTab, settings)
-      if (check.canSuspend) {
-        // Find a tab to switch to (prefer already-discarded tabs)
-        const switchTarget = win.tabs.find((t) => t.id !== activeTab.id && t.id !== undefined)
-        if (switchTarget?.id) {
-          // Activate another tab first, then suspend the previously active one
-          await chrome.tabs.update(switchTarget.id, { active: true })
-          const success = await suspendTab(activeTab.id)
-          if (success) suspended++
-        }
-      }
-    }
   }
 
+  console.log(`[Raft] Suspended ${suspended} tabs across all windows`)
   return suspended
 }
 

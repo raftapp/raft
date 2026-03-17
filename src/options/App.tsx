@@ -45,7 +45,11 @@ function formatDate(timestamp: number): string {
 export function App() {
   const [settings, setSettings] = useState<Settings>(DEFAULT_SETTINGS)
   const [loading, setLoading] = useState(true)
-  const [activeTab, setActiveTab] = useState<TabType>('general')
+  const [activeTab, setActiveTab] = useState<TabType>(() => {
+    const hash = globalThis.location?.hash?.slice(1)
+    const validTabs: TabType[] = ['general', 'sessions', 'browser-sync', 'cloud', 'about', 'dev']
+    return validTabs.includes(hash as TabType) ? (hash as TabType) : 'general'
+  })
   const [deleteConfirm, setDeleteConfirm] = useState<string | null>(null)
   const [isPro, setIsPro] = useState(false) // Checked asynchronously via checkProStatus()
   const [syncStatus, setSyncStatus] = useState<{
@@ -695,6 +699,22 @@ export function App() {
 
                     {/* Form detection feature hidden until implemented */}
                   </div>
+
+                  <label class="flex items-center gap-3">
+                    <input
+                      type="checkbox"
+                      checked={settings.suspension.hibernateOnStartup}
+                      onChange={(e) =>
+                        handleSettingChange({
+                          suspension: {
+                            hibernateOnStartup: (e.target as HTMLInputElement).checked,
+                          },
+                        })
+                      }
+                      class="w-4 h-4 rounded border-raft-300 text-raft-600 focus:ring-raft-500"
+                    />
+                    <span class="text-raft-700">Hibernate tabs when browser starts</span>
+                  </label>
                 </div>
               </section>
 

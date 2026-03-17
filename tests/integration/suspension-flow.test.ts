@@ -118,7 +118,7 @@ describe('Suspension Flow Integration', () => {
       expect(tabs.find((t) => t.id === 4)?.discarded).toBe(false)
     })
 
-    it('should suspend all tabs across all windows including active tabs', async () => {
+    it('should suspend non-active tabs across all windows, skipping active tabs', async () => {
       addMockTab({ id: 1, windowId: 1, url: 'https://w1-active.com', active: true })
       addMockTab({ id: 2, windowId: 1, url: 'https://w1-other.com', active: false })
       addMockTab({ id: 3, windowId: 2, url: 'https://w2-active.com', active: true })
@@ -126,14 +126,15 @@ describe('Suspension Flow Integration', () => {
 
       const count = await suspendAllTabs()
 
-      expect(count).toBe(4) // All tabs including previously active ones
+      expect(count).toBe(2) // Only non-active tabs
 
       const tabs = getMockTabs()
 
-      // All tabs should be suspended
-      expect(tabs.find((t) => t.id === 1)?.discarded).toBe(true)
+      // Active tabs should NOT be suspended
+      expect(tabs.find((t) => t.id === 1)?.discarded).toBe(false)
+      expect(tabs.find((t) => t.id === 3)?.discarded).toBe(false)
+      // Non-active tabs should be suspended
       expect(tabs.find((t) => t.id === 2)?.discarded).toBe(true)
-      expect(tabs.find((t) => t.id === 3)?.discarded).toBe(true)
       expect(tabs.find((t) => t.id === 4)?.discarded).toBe(true)
     })
 

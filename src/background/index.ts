@@ -1545,8 +1545,33 @@ chrome.runtime.onInstalled.addListener(async (details) => {
 /**
  * Handle service worker startup (wake from termination)
  */
-chrome.runtime.onStartup.addListener(() => {
+chrome.runtime.onStartup.addListener(async () => {
   // Don't call initialize() here - it runs at the bottom of the script
+  await initReady
+  const settings = await settingsStorage.get()
+  if (settings.suspension.hibernateOnStartup) {
+    console.log('[Raft] Hibernate on startup enabled, suspending all tabs')
+    const windows = await chrome.windows.getAll()
+    for (const win of windows) {
+      if (!win.id) continue
+      // We need a Raft extension page as the active tab so chrome.tabs.discard()
+      // can suspend the user's previously-active tab. Reuse one if already open.
+      const extensionOrigin = chrome.runtime.getURL('')
+      const winTabs = await chrome.tabs.query({ windowId: win.id })
+      const raftTab = winTabs.find((t) => t.url?.startsWith(extensionOrigin))
+      if (raftTab?.id) {
+        await chrome.tabs.update(raftTab.id, { active: true })
+      } else {
+        await chrome.tabs.create({
+          url: chrome.runtime.getURL('src/options/index.html#sessions'),
+          active: true,
+          windowId: win.id,
+        })
+      }
+      const count = await suspendOtherTabs(win.id)
+      console.log(`[Raft] Hibernated ${count} tabs in window ${win.id}`)
+    }
+  }
 })
 
 // Handle keyboard commands

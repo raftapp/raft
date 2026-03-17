@@ -4,6 +4,15 @@ All notable changes to Raft will be documented in this file.
 
 Format based on [Keep a Changelog](https://keepachangelog.com/).
 
+## [1.1.0] - 2026-03-17
+
+### Added
+- Hibernate all tabs on browser start option (contributed by @eymerich)
+
+### Security
+- Fix 8 Dependabot alerts: undici (CRLF injection, HTTP smuggling, WebSocket overflow), minimatch (ReDoS), rollup (path traversal)
+- Update @crxjs/vite-plugin 2.3.0 → 2.4.0
+
 ## [1.0.1] - 2025-02-23
 
 ### Fixed
@@ -32,5 +41,6 @@ Initial release on Chrome Web Store.
 - Cloud Sync (Pro): client-side encrypted backup to Google Drive
 - Onboarding page for first-time users
 
+[1.1.0]: https://github.com/raftapp/raft/compare/v1.0.1...v1.1.0
 [1.0.1]: https://github.com/raftapp/raft/compare/v1.0.0...v1.0.1
 [1.0.0]: https://github.com/raftapp/raft/releases/tag/v1.0.0

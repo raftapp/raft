@@ -48,6 +48,15 @@ export const SYNC_LIMITS = {
   QUOTA_SAFETY_MARGIN: 0.9,
 } as const
 
+/** Storage keys for chrome.storage.session (survives SW restarts, resets on browser restart) */
+export const SESSION_KEYS = {
+  /** Hibernation guard state for startup tab discarding */
+  HIBERNATION_GUARD: 'raft:hibernationGuard',
+} as const
+
+/** Duration (ms) to keep the hibernation guard active after startup */
+export const HIBERNATION_GUARD_DURATION_MS = 30_000
+
 /** Alarm names for chrome.alarms */
 export const ALARM_NAMES = {
   /** Periodic check for tabs to suspend */

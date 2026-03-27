@@ -17,6 +17,9 @@ import {
   DEV_TEST_WINDOWS_KEY,
   RECOVERY_CONFIG,
   EXPORT_REMINDER_CONFIG,
+  SESSION_KEYS,
+  HIBERNATION_GUARD_DURATION_MS,
+  PROTECTED_URL_PATTERNS,
 } from '@/shared/constants'
 import {
   shouldRestoreFromSync,
@@ -123,6 +126,69 @@ async function savePreviousActiveTabs(): Promise<void> {
     obj[String(windowId)] = tabId
   }
   await storage.set(STORAGE_KEYS.PREVIOUS_ACTIVE_TABS, obj)
+}
+
+// ============================================================================
+// Hibernation Guard
+// ============================================================================
+
+/**
+ * After startup hibernation, Chrome may load tabs that couldn't be discarded
+ * (no main frame yet) or may undo discards via its BackgroundTabLoadingPolicy.
+ * This guard re-discards those tabs during a short window after startup.
+ */
+async function maybeHibernateTab(tabId: number): Promise<void> {
+  const result = await chrome.storage.session.get(SESSION_KEYS.HIBERNATION_GUARD)
+  const guard = result[SESSION_KEYS.HIBERNATION_GUARD] as
+    | { expiresAt: number; tabIds: number[] }
+    | undefined
+  if (!guard) return
+
+  if (Date.now() > guard.expiresAt) {
+    await chrome.storage.session.remove(SESSION_KEYS.HIBERNATION_GUARD)
+    return
+  }
+
+  if (!guard.tabIds.includes(tabId)) return
+
+  const tab = await chrome.tabs.get(tabId)
+  if (tab.active) return
+  if (tab.discarded) return
+
+  console.log(`[Raft] Hibernation guard: discarding tab ${tabId} (${tab.url})`)
+  try {
+    await chrome.tabs.discard(tabId)
+  } catch (e) {
+    console.warn(`[Raft] Hibernation guard: failed to discard tab ${tabId}:`, e)
+  }
+}
+
+/**
+ * Hibernate all eligible tabs in a window. Used by the onCreated guard
+ * when a normal browser window appears after onStartup already ran
+ * (e.g., PWA started Chrome first, then the regular window restored).
+ */
+async function hibernateWindow(windowId: number): Promise<void> {
+  const settings = await settingsStorage.get()
+  if (!settings.suspension.hibernateOnStartup) return
+
+  const extensionOrigin = chrome.runtime.getURL('')
+  const winTabs = await chrome.tabs.query({ windowId })
+
+  // Open a Raft page as the active tab so we can discard the user's active tab
+  const raftTab = winTabs.find((t) => t.url?.startsWith(extensionOrigin))
+  if (raftTab?.id) {
+    await chrome.tabs.update(raftTab.id, { active: true })
+  } else {
+    await chrome.tabs.create({
+      url: chrome.runtime.getURL('src/options/index.html#sessions'),
+      active: true,
+      windowId,
+    })
+  }
+
+  const count = await suspendOtherTabs(windowId)
+  console.log(`[Raft] Hibernation guard: hibernated ${count} tabs in late window ${windowId}`)
 }
 
 // ============================================================================
@@ -554,6 +620,11 @@ chrome.tabs.onActivated.addListener(async (activeInfo) => {
  * Track tab updates (URL changes, discard state changes, etc.)
  */
 chrome.tabs.onUpdated.addListener(async (tabId, changeInfo) => {
+  // Hibernation guard: discard tabs that loaded during startup window
+  if (changeInfo.status === 'complete' || changeInfo.discarded === false) {
+    await maybeHibernateTab(tabId)
+  }
+
   // When a tab loads, mark it as active
   if (changeInfo.status === 'complete') {
     await tabActivityStorage.touch(tabId)
@@ -578,6 +649,31 @@ chrome.tabs.onUpdated.addListener(async (tabId, changeInfo) => {
 chrome.tabs.onRemoved.addListener(async (tabId) => {
   await tabActivityStorage.remove(tabId)
   await updateBadge()
+})
+
+/**
+ * Hibernation guard: when a normal browser window appears during the guard
+ * window, hibernate its tabs. This handles the case where a PWA starts Chrome
+ * first (triggering onStartup before the regular window exists).
+ */
+chrome.windows.onCreated.addListener(async (win) => {
+  if (win.type !== 'normal' || !win.id) return
+  await initReady
+
+  const settings = await settingsStorage.get()
+  if (!settings.suspension.hibernateOnStartup) return
+
+  // Only hibernate the first normal window — this is effectively a "startup"
+  // for the browser UI (e.g., PWA kept Chrome alive, user opens a browser window).
+  // If other normal windows already exist, this is just a new window (Ctrl+N).
+  const normalWindows = await chrome.windows.getAll()
+  const normalCount = normalWindows.filter((w) => w.type === 'normal').length
+  if (normalCount > 1) return
+
+  // Small delay to let Chrome finish creating/restoring tabs in the window
+  await new Promise((resolve) => setTimeout(resolve, 500))
+  console.log(`[Raft] First normal window detected (${win.id}), hibernating...`)
+  await hibernateWindow(win.id)
 })
 
 /**
@@ -1551,12 +1647,14 @@ chrome.runtime.onStartup.addListener(async () => {
   const settings = await settingsStorage.get()
   if (settings.suspension.hibernateOnStartup) {
     console.log('[Raft] Hibernate on startup enabled, suspending all tabs')
-    const windows = await chrome.windows.getAll()
+    const allWindows = await chrome.windows.getAll()
+    const windows = allWindows.filter((w) => w.type === 'normal')
+    const extensionOrigin = chrome.runtime.getURL('')
+    const hibernateTabIds: number[] = []
     for (const win of windows) {
       if (!win.id) continue
       // We need a Raft extension page as the active tab so chrome.tabs.discard()
       // can suspend the user's previously-active tab. Reuse one if already open.
-      const extensionOrigin = chrome.runtime.getURL('')
       const winTabs = await chrome.tabs.query({ windowId: win.id })
       const raftTab = winTabs.find((t) => t.url?.startsWith(extensionOrigin))
       if (raftTab?.id) {
@@ -1568,9 +1666,33 @@ chrome.runtime.onStartup.addListener(async () => {
           windowId: win.id,
         })
       }
+      // Record all non-active, non-protected tabs for the hibernation guard
+      for (const t of winTabs) {
+        if (
+          t.id &&
+          !t.active &&
+          t.url &&
+          !t.url.startsWith(extensionOrigin) &&
+          !PROTECTED_URL_PATTERNS.some((p) => t.url!.startsWith(p))
+        ) {
+          hibernateTabIds.push(t.id)
+        }
+      }
       const count = await suspendOtherTabs(win.id)
       console.log(`[Raft] Hibernated ${count} tabs in window ${win.id}`)
     }
+    // Guard catches tabs that couldn't be discarded yet (no main frame),
+    // tabs Chrome's startup loader undiscards, and normal windows that
+    // appear after onStartup (e.g., PWA started Chrome first)
+    await chrome.storage.session.set({
+      [SESSION_KEYS.HIBERNATION_GUARD]: {
+        expiresAt: Date.now() + HIBERNATION_GUARD_DURATION_MS,
+        tabIds: hibernateTabIds,
+      },
+    })
+    console.log(
+      `[Raft] Hibernation guard set for ${hibernateTabIds.length} tabs (${HIBERNATION_GUARD_DURATION_MS / 1000}s window)`
+    )
   }
 })
 

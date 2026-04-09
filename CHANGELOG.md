@@ -4,6 +4,14 @@ All notable changes to Raft will be documented in this file.
 
 Format based on [Keep a Changelog](https://keepachangelog.com/).
 
+## [1.1.1] - 2026-04-09
+
+### Fixed
+- Fix hibernate on startup with PWAs and Chrome's tab loader
+
+### Security
+- Fix 17 Dependabot security alerts via Vite upgrade and pnpm overrides
+
 ## [1.1.0] - 2026-03-17
 
 ### Added
@@ -41,6 +49,7 @@ Initial release on Chrome Web Store.
 - Cloud Sync (Pro): client-side encrypted backup to Google Drive
 - Onboarding page for first-time users
 
+[1.1.1]: https://github.com/raftapp/raft/compare/v1.1.0...v1.1.1
 [1.1.0]: https://github.com/raftapp/raft/compare/v1.0.1...v1.1.0
 [1.0.1]: https://github.com/raftapp/raft/compare/v1.0.0...v1.0.1
 [1.0.0]: https://github.com/raftapp/raft/releases/tag/v1.0.0

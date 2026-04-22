@@ -133,9 +133,28 @@ async function savePreviousActiveTabs(): Promise<void> {
 // ============================================================================
 
 /**
- * After startup hibernation, Chrome may load tabs that couldn't be discarded
- * (no main frame yet) or may undo discards via its BackgroundTabLoadingPolicy.
- * This guard re-discards those tabs during a short window after startup.
+ * Post-startup re-discard guard.
+ *
+ * After onStartup fires and Raft discards all eligible tabs, Chrome still
+ * does two annoying things during the next ~30 seconds:
+ *   1. Loads tabs that weren't discardable at the moment we asked (no main
+ *      frame yet) — they come in fresh, un-discarded.
+ *   2. Undiscards recently-used tabs via its BackgroundTabLoadingPolicy.
+ *
+ * The guard catches both by re-discarding any tab-in-the-watch-list whose
+ * status transitions to 'complete' or whose `discarded` flag goes false
+ * inside the window (see the tabs.onUpdated listener).
+ *
+ * PWA QUIRK (commit 50d3d7b, issue #6): when Chrome is cold-started by a
+ * PWA, onStartup runs before any normal browser window exists. The regular
+ * window gets restored later — AFTER onStartup has already finished. That
+ * window's tabs never saw the initial discard pass, so `hibernateWindow()`
+ * (called from chrome.windows.onCreated during the guard window) sweeps
+ * them up too.
+ *
+ * The 30s HIBERNATION_GUARD_DURATION_MS was tuned empirically against
+ * Chrome 131 with PWA-started sessions. Do NOT shorten without retesting
+ * the PWA path — shorter windows regress #6.
  */
 async function maybeHibernateTab(tabId: number): Promise<void> {
   const result = await chrome.storage.session.get(SESSION_KEYS.HIBERNATION_GUARD)

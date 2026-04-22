@@ -5,7 +5,6 @@
  */
 
 import { checkLicense } from './lemonsqueezy'
-import { DEV_PRO_OVERRIDE_KEY } from '../constants'
 
 /**
  * Feature flags for different tiers
@@ -49,11 +48,18 @@ const PRO_FEATURES: FeatureFlags = {
 }
 
 /**
- * Check if user is Pro
+ * Check if user is Pro.
+ *
+ * The dev-only override lets us exercise Pro flows locally without a real
+ * Lemon Squeezy license. It is gated by `import.meta.env.DEV` so that Vite
+ * dead-code-eliminates the entire block (key lookup + storage read) in
+ * production builds — the storage key literal never reaches the shipped JS.
  */
 export async function isProUser(): Promise<boolean> {
-  const result = await chrome.storage.local.get(DEV_PRO_OVERRIDE_KEY)
-  if (result[DEV_PRO_OVERRIDE_KEY]) return true
+  if (import.meta.env.DEV) {
+    const result = await chrome.storage.local.get('raft:dev:proOverride')
+    if (result['raft:dev:proOverride']) return true
+  }
   const { isPro } = await checkLicense()
   return isPro
 }

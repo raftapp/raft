@@ -54,7 +54,26 @@ export const SESSION_KEYS = {
   HIBERNATION_GUARD: 'raft:hibernationGuard',
 } as const
 
-/** Duration (ms) to keep the hibernation guard active after startup */
+/**
+ * Duration (ms) to keep the hibernation guard active after startup.
+ *
+ * WHY THIS EXISTS (don't "clean it up"):
+ * After onStartup runs and we discard eligible tabs, Chrome can still
+ *   1. Load tabs that weren't discardable at the moment we asked (no main
+ *      frame yet), and
+ *   2. Undo discards via its BackgroundTabLoadingPolicy for recently-used
+ *      tabs.
+ * The guard re-discards any watched tab whose status turns 'complete' or
+ * whose `discarded` flag flips false inside this window.
+ *
+ * PWA QUIRK: when Chrome cold-starts from a PWA, onStartup fires before
+ * any normal browser window exists. The real window shows up LATER — after
+ * onStartup has finished — so a window-level handler re-hibernates its
+ * tabs during this same window (see src/background/index.ts).
+ *
+ * 30s was tuned empirically against Chrome 131 with PWA-started sessions.
+ * Shortening this regresses the PWA path from commit 50d3d7b / issue #6.
+ */
 export const HIBERNATION_GUARD_DURATION_MS = 30_000
 
 /** Alarm names for chrome.alarms */

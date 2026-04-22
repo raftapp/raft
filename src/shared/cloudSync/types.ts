@@ -42,6 +42,14 @@ export interface EncryptionKeyData {
   verificationHash: string
   /** Tokens encrypted with recovery-derived key (JSON-stringified EncryptedPayload) */
   recoveryPayload?: string
+  /**
+   * PBKDF2 iteration count used to derive this record's key.
+   *
+   * New installs write the current PBKDF2_ITERATIONS here. Records written
+   * before this field existed are missing it — the unlock path defaults
+   * them to LEGACY_PBKDF2_ITERATIONS so they still verify.
+   */
+  iterations?: number
 }
 
 /**

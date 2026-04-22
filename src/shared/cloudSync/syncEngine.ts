@@ -28,6 +28,7 @@ import {
   computeChecksum,
   decrypt,
   createVerificationHash,
+  LEGACY_PBKDF2_ITERATIONS,
 } from './encryption'
 import { OAuthError, getValidTokens } from './oauth'
 import { DriveApiError } from './providers/gdrive'
@@ -133,7 +134,14 @@ export async function unlock(password: string): Promise<boolean> {
   }
 
   try {
-    const key = await deriveKey(password, keyData.salt)
+    // Thread iterations from keyData so legacy installs (no `iterations`
+    // field, pre-600k default) keep unlocking at their original strength.
+    // New installs write PBKDF2_ITERATIONS into keyData at setup time.
+    const key = await deriveKey(
+      password,
+      keyData.salt,
+      keyData.iterations ?? LEGACY_PBKDF2_ITERATIONS
+    )
 
     // Verify password correctness
     const credentials = await cloudCredentialsStorage.get()

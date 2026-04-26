@@ -4,6 +4,17 @@ All notable changes to Raft will be documented in this file.
 
 Format based on [Keep a Changelog](https://keepachangelog.com/).
 
+## [1.1.2] - 2026-04-26
+
+### Security
+- Bump PBKDF2 iterations from 100k to 600k (with legacy fallback for existing keys)
+- Gate dev Pro-override check behind `import.meta.env.DEV`
+
+### Internal
+- Add `build-no-env` CI job to lock placeholder-injection guarantee
+- Honor `keyData.iterations` on unlock (legacy 100k fallback)
+- Expand hibernation-guard documentation
+
 ## [1.1.1] - 2026-04-09
 
 ### Fixed
@@ -49,6 +60,7 @@ Initial release on Chrome Web Store.
 - Cloud Sync (Pro): client-side encrypted backup to Google Drive
 - Onboarding page for first-time users
 
+[1.1.2]: https://github.com/raftapp/raft/compare/v1.1.1...v1.1.2
 [1.1.1]: https://github.com/raftapp/raft/compare/v1.1.0...v1.1.1
 [1.1.0]: https://github.com/raftapp/raft/compare/v1.0.1...v1.1.0
 [1.0.1]: https://github.com/raftapp/raft/compare/v1.0.0...v1.0.1

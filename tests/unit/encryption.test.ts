@@ -476,3 +476,42 @@ describe('reEncrypt', () => {
     await expect(reEncrypt(encrypted, wrongKey, newKey)).rejects.toThrow()
   })
 })
+
+describe('PBKDF2 iteration count migration', () => {
+  it('verifies legacy records (no iterations field) using 100k fallback', async () => {
+    // Simulate a record written before the 600k bump: derive at 100k and
+    // build keyData WITHOUT the iterations field.
+    const password = 'legacyPassword'
+    const salt = generateSalt()
+    const legacyKey = await deriveKey(password, salt, 100_000)
+    const verificationHash = await createVerificationHash(legacyKey, salt)
+    const legacyKeyData: EncryptionKeyData = { salt, verificationHash }
+
+    expect(await verifyPassword(password, legacyKeyData)).toBe(true)
+    expect(await verifyPassword('wrongPassword', legacyKeyData)).toBe(false)
+  })
+
+  it('tags new setupEncryption records with the current iteration count (600k)', async () => {
+    const { keyData } = await setupEncryption('newPassword')
+    expect(keyData.iterations).toBe(600_000)
+  })
+
+  it('rejects a legacy record when verified with the wrong iteration count', async () => {
+    // Sanity check: if legacy fallback ever broke (e.g., default flipped to
+    // 600k when iterations is missing), verification of a 100k record would
+    // silently fail. This test pins the fallback semantics.
+    const password = 'legacyPassword'
+    const salt = generateSalt()
+    const legacyKey = await deriveKey(password, salt, 100_000)
+    const verificationHash = await createVerificationHash(legacyKey, salt)
+
+    // Same record, but explicitly mark it as a 600k record. Verification
+    // MUST fail because the hash was made with 100k.
+    const mislabeledKeyData: EncryptionKeyData = {
+      salt,
+      verificationHash,
+      iterations: 600_000,
+    }
+    expect(await verifyPassword(password, mislabeledKeyData)).toBe(false)
+  })
+})

@@ -131,3 +131,42 @@ jobs:
           name: raft-extension
           path: dist/
           retention-days: 7
+
+  build-no-env:
+    name: Build Must Fail Without Placeholders
+    runs-on: ubuntu-latest
+    # No VITE_GOOGLE_CLIENT_ID / VITE_GOOGLE_CLIENT_SECRET in env on purpose.
+    # vite.config.ts throws when these are missing, and the
+    # validateNoPlaceholders plugin throws if any __PLACEHOLDER__ survives
+    # into dist/. This job locks both guarantees in CI so a regression that
+    # makes the build succeed with no env vars will fail here.
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 8
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'pnpm'
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Build must fail without env placeholders
+        run: |
+          set +e
+          pnpm build
+          rc=$?
+          set -e
+          if [ $rc -eq 0 ]; then
+            echo "::error::Build succeeded without VITE_GOOGLE_CLIENT_ID/SECRET. Placeholder injection is broken — see vite.config.ts."
+            exit 1
+          fi
+          echo "OK: Build failed as expected without env vars (exit code $rc)."

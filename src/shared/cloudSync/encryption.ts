@@ -2,15 +2,32 @@
  * Client-side encryption for cloud sync
  *
  * Uses Web Crypto API:
- * - PBKDF2 for key derivation (100K iterations, SHA-256)
+ * - PBKDF2 for key derivation (600K iterations, SHA-256; legacy data uses 100K)
  * - AES-256-GCM for authenticated encryption
  * - Unique 96-bit IV per encryption operation
  */
 
 import type { EncryptedPayload, EncryptionKeyData } from './types'
 
-/** PBKDF2 iteration count - high for security, acceptable on modern devices */
-const PBKDF2_ITERATIONS = 100_000
+/**
+ * PBKDF2 iteration count for new key derivations.
+ *
+ * 600_000 matches OWASP's 2023+ recommendation for PBKDF2-SHA256. On modern
+ * hardware this is ~400–700 ms for a single derivation, which we accept
+ * because unlock happens at most once per cached-key lifetime.
+ *
+ * Existing installs that predate this bump store no `iterations` field on
+ * their `EncryptionKeyData` — callers MUST fall back to
+ * LEGACY_PBKDF2_ITERATIONS for those records so they continue to unlock.
+ */
+export const PBKDF2_ITERATIONS = 600_000
+
+/**
+ * Iteration count used before the bump to 600K. Kept here (and exported) so
+ * the unlock path can default missing `keyData.iterations` to the original
+ * value rather than silently failing verification.
+ */
+export const LEGACY_PBKDF2_ITERATIONS = 100_000
 
 /** Salt length in bytes */
 const SALT_LENGTH = 32
@@ -78,9 +95,17 @@ export function generateRecoveryKey(): string {
 }
 
 /**
- * Derive an encryption key from a password using PBKDF2
+ * Derive an encryption key from a password using PBKDF2.
+ *
+ * `iterations` defaults to PBKDF2_ITERATIONS (current standard). Legacy
+ * unlock paths must pass `keyData.iterations ?? LEGACY_PBKDF2_ITERATIONS`
+ * so pre-600k records still derive the correct key.
  */
-export async function deriveKey(password: string, salt: string): Promise<CryptoKey> {
+export async function deriveKey(
+  password: string,
+  salt: string,
+  iterations: number = PBKDF2_ITERATIONS
+): Promise<CryptoKey> {
   const encoder = new TextEncoder()
   const passwordBuffer = encoder.encode(password)
   const saltBuffer = base64ToBuffer(salt)
@@ -96,7 +121,7 @@ export async function deriveKey(password: string, salt: string): Promise<CryptoK
     {
       name: 'PBKDF2',
       salt: saltBuffer,
-      iterations: PBKDF2_ITERATIONS,
+      iterations,
       hash: 'SHA-256',
     },
     passwordKey,
@@ -109,10 +134,14 @@ export async function deriveKey(password: string, salt: string): Promise<CryptoK
 /**
  * Derive a key from the recovery key (which is itself random entropy)
  */
-export async function deriveKeyFromRecovery(recoveryKey: string, salt: string): Promise<CryptoKey> {
+export async function deriveKeyFromRecovery(
+  recoveryKey: string,
+  salt: string,
+  iterations: number = PBKDF2_ITERATIONS
+): Promise<CryptoKey> {
   // Remove dashes from formatted recovery key
   const cleanKey = recoveryKey.replace(/-/g, '')
-  return deriveKey(cleanKey, salt)
+  return deriveKey(cleanKey, salt, iterations)
 }
 
 /**
@@ -134,14 +163,17 @@ export async function createVerificationHash(key: CryptoKey, salt: string): Prom
 }
 
 /**
- * Verify a password is correct by checking the verification hash
+ * Verify a password is correct by checking the verification hash.
+ * Uses `keyData.iterations` if present, falling back to LEGACY_PBKDF2_ITERATIONS
+ * so records written before the 600k bump still verify.
  */
 export async function verifyPassword(
   password: string,
   keyData: EncryptionKeyData
 ): Promise<boolean> {
   try {
-    const key = await deriveKey(password, keyData.salt)
+    const iterations = keyData.iterations ?? LEGACY_PBKDF2_ITERATIONS
+    const key = await deriveKey(password, keyData.salt, iterations)
     const hash = await createVerificationHash(key, keyData.salt)
     return hash === keyData.verificationHash
   } catch {
@@ -211,21 +243,23 @@ export async function computeChecksum(data: string): Promise<string> {
 }
 
 /**
- * Setup encryption for a new user
- * Returns the key data to store and the recovery key to show the user
+ * Setup encryption for a new user.
+ * Writes `iterations: PBKDF2_ITERATIONS` into keyData so this install is
+ * tagged with the current (strong) count and never falls back to legacy.
  */
 export async function setupEncryption(
   password: string
 ): Promise<{ keyData: EncryptionKeyData; recoveryKey: string; key: CryptoKey }> {
   const salt = generateSalt()
   const recoveryKey = generateRecoveryKey()
-  const key = await deriveKey(password, salt)
+  const key = await deriveKey(password, salt, PBKDF2_ITERATIONS)
   const verificationHash = await createVerificationHash(key, salt)
 
   return {
     keyData: {
       salt,
       verificationHash,
+      iterations: PBKDF2_ITERATIONS,
     },
     recoveryKey,
     key,

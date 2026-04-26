@@ -9,6 +9,7 @@
 
 import { GDRIVE_API } from '../../constants'
 import type { EncryptedPayload, SyncManifest } from '../types'
+import type { ProviderKeyData } from './types'
 
 /**
  * Google Drive file metadata
@@ -302,17 +303,9 @@ export async function downloadManifest(accessToken: string): Promise<SyncManifes
 }
 
 /**
- * Key data stored on Drive (subset of EncryptionKeyData — no recoveryPayload)
- */
-interface DriveKeyData {
-  salt: string
-  verificationHash: string
-}
-
-/**
  * Upload key data (salt + verification hash) to Drive for reconnect detection
  */
-export async function uploadKeyData(accessToken: string, keyData: DriveKeyData): Promise<void> {
+export async function uploadKeyData(accessToken: string, keyData: ProviderKeyData): Promise<void> {
   const content = JSON.stringify(keyData)
   await uploadFile(accessToken, GDRIVE_API.KEYDATA_FILE, content)
 }
@@ -320,7 +313,7 @@ export async function uploadKeyData(accessToken: string, keyData: DriveKeyData):
 /**
  * Download key data from Drive, returns null if not found
  */
-export async function downloadKeyData(accessToken: string): Promise<DriveKeyData | null> {
+export async function downloadKeyData(accessToken: string): Promise<ProviderKeyData | null> {
   const file = await findFile(accessToken, GDRIVE_API.KEYDATA_FILE)
   if (!file) {
     return null

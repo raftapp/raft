@@ -32,7 +32,8 @@ import {
 } from './encryption'
 import { OAuthError, getValidTokens } from './oauth'
 import { DriveApiError } from './providers/gdrive'
-import * as gdrive from './providers/gdrive'
+import { createGoogleDriveProvider } from './providers/gdriveProvider'
+import type { SyncProvider } from './providers/types'
 import * as syncQueue from './syncQueue'
 import { sessionsStorage } from '../storage'
 import { TOMBSTONE_RETENTION_MS, CLOUD_SYNC_KEYS } from '../constants'
@@ -261,6 +262,18 @@ export async function getValidTokensForDisconnect(): Promise<CloudTokens | null>
 }
 
 /**
+ * Build a SyncProvider bound to the current valid OAuth tokens.
+ *
+ * The engine talks to cloud storage exclusively through this — swapping in
+ * a different backend (WebDAV, iCloud, encrypted file export) only requires
+ * changing the construction here.
+ */
+async function getProvider(): Promise<SyncProvider> {
+  const tokens = await getTokens()
+  return createGoogleDriveProvider(tokens.accessToken)
+}
+
+/**
  * Perform a full sync (push + pull)
  */
 export async function performFullSync(): Promise<SyncResult> {
@@ -276,13 +289,13 @@ export async function performFullSync(): Promise<SyncResult> {
 
   try {
     await withManifestLock(async () => {
-      const tokens = await getTokens()
+      const provider = await getProvider()
       const key = getEncryptionKey()
       const deviceId = await deviceIdStorage.get()
 
       // 1. Download remote manifest
       await syncStateStorage.update({ currentOperation: 'Fetching remote state...' })
-      let remoteManifest = await gdrive.downloadManifest(tokens.accessToken)
+      let remoteManifest = await provider.getManifest()
 
       // 2. Get local sessions
       const localSessions = await sessionsStorage.getAll()
@@ -336,7 +349,7 @@ export async function performFullSync(): Promise<SyncResult> {
             }
             const serializedData = JSON.stringify(sessionData)
             const encrypted = await encryptObject(sessionData, key)
-            await gdrive.uploadSession(tokens.accessToken, session.id, encrypted)
+            await provider.write(session.id, encrypted)
 
             // Update manifest
             const meta: SyncSessionMeta = {
@@ -366,7 +379,7 @@ export async function performFullSync(): Promise<SyncResult> {
 
         // Download and decrypt
         try {
-          const encrypted = await gdrive.downloadSession(tokens.accessToken, sessionId)
+          const encrypted = await provider.read(sessionId)
           if (!encrypted) continue
 
           const sessionData = await decryptObject<CloudSessionData>(encrypted, key)
@@ -392,7 +405,7 @@ export async function performFullSync(): Promise<SyncResult> {
         ) {
           // Session was previously synced to this device but deleted locally
           try {
-            await gdrive.deleteSession(tokens.accessToken, sessionId)
+            await provider.delete(sessionId)
             remoteManifest.tombstones.push({ id: sessionId, deletedAt: Date.now() })
             remoteSessionMap.delete(sessionId)
             result.deleted++
@@ -406,7 +419,7 @@ export async function performFullSync(): Promise<SyncResult> {
       remoteManifest.sessions = Array.from(remoteSessionMap.values())
       remoteManifest.lastSync = Date.now()
       remoteManifest.deviceId = deviceId
-      await gdrive.uploadManifest(tokens.accessToken, remoteManifest)
+      await provider.setManifest(remoteManifest)
 
       // 8. Cache cloud-synced session IDs locally for UI badges
       await saveSyncedIds(remoteManifest.sessions.map((s) => s.id))
@@ -452,7 +465,7 @@ export async function pushSession(sessionId: string): Promise<void> {
 
   try {
     await withManifestLock(async () => {
-      const tokens = await getTokens()
+      const provider = await getProvider()
       const key = getEncryptionKey()
       const deviceId = await deviceIdStorage.get()
 
@@ -469,10 +482,10 @@ export async function pushSession(sessionId: string): Promise<void> {
 
       const serializedData = JSON.stringify(sessionData)
       const encrypted = await encryptObject(sessionData, key)
-      await gdrive.uploadSession(tokens.accessToken, sessionId, encrypted)
+      await provider.write(sessionId, encrypted)
 
       // Update manifest
-      const manifest = await gdrive.downloadManifest(tokens.accessToken)
+      const manifest = await provider.getManifest()
       if (manifest) {
         const meta: SyncSessionMeta = {
           id: session.id,
@@ -491,7 +504,7 @@ export async function pushSession(sessionId: string): Promise<void> {
 
         manifest.lastSync = Date.now()
         manifest.deviceId = deviceId
-        await gdrive.uploadManifest(tokens.accessToken, manifest)
+        await provider.setManifest(manifest)
       }
 
       // Cache the synced ID locally for UI badges
@@ -518,13 +531,13 @@ export async function deleteSessionFromCloud(sessionId: string): Promise<void> {
 
   try {
     await withManifestLock(async () => {
-      const tokens = await getTokens()
+      const provider = await getProvider()
       const deviceId = await deviceIdStorage.get()
 
-      await gdrive.deleteSession(tokens.accessToken, sessionId)
+      await provider.delete(sessionId)
 
       // Update manifest with tombstone
-      const manifest = await gdrive.downloadManifest(tokens.accessToken)
+      const manifest = await provider.getManifest()
       if (manifest) {
         manifest.sessions = manifest.sessions.filter((s) => s.id !== sessionId)
         manifest.tombstones.push({
@@ -533,7 +546,7 @@ export async function deleteSessionFromCloud(sessionId: string): Promise<void> {
         })
         manifest.lastSync = Date.now()
         manifest.deviceId = deviceId
-        await gdrive.uploadManifest(tokens.accessToken, manifest)
+        await provider.setManifest(manifest)
       }
 
       // Remove the synced ID from local cache
@@ -560,7 +573,7 @@ export async function processQueue(): Promise<void> {
       if (item.type === 'upload') {
         const session = await sessionsStorage.get(item.sessionId)
         if (session) {
-          const tokens = await getTokens()
+          const provider = await getProvider()
           const key = getEncryptionKey()
           const deviceId = await deviceIdStorage.get()
 
@@ -571,11 +584,11 @@ export async function processQueue(): Promise<void> {
           }
 
           const encrypted = await encryptObject(sessionData, key)
-          await gdrive.uploadSession(tokens.accessToken, item.sessionId, encrypted)
+          await provider.write(item.sessionId, encrypted)
         }
       } else if (item.type === 'delete') {
-        const tokens = await getTokens()
-        await gdrive.deleteSession(tokens.accessToken, item.sessionId)
+        const provider = await getProvider()
+        await provider.delete(item.sessionId)
       }
 
       await syncQueue.markComplete(item.id)

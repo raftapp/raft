@@ -86,6 +86,17 @@ export function detectImportFormat(content: string): ImportFormat | null {
     try {
       const parsed = JSON.parse(trimmed)
 
+      // Check for encrypted Raft bundle envelope (file-shaped, not Drive-shaped)
+      if (
+        parsed.v === 1 &&
+        typeof parsed.salt === 'string' &&
+        typeof parsed.iv === 'string' &&
+        typeof parsed.ct === 'string' &&
+        typeof parsed.iterations === 'number'
+      ) {
+        return 'raftbundle'
+      }
+
       // Check for Raft format (has version and raftVersion fields)
       if (parsed.version && parsed.raftVersion && Array.isArray(parsed.sessions)) {
         return 'raft'

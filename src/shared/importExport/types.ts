@@ -7,7 +7,13 @@ import type { Session } from '../types'
 /**
  * Supported import formats
  */
-export type ImportFormat = 'onetab' | 'sessionBuddy' | 'tabSessionManager' | 'toby' | 'raft'
+export type ImportFormat =
+  | 'onetab'
+  | 'sessionBuddy'
+  | 'tabSessionManager'
+  | 'toby'
+  | 'raft'
+  | 'raftbundle'
 
 /**
  * Individual import error with context

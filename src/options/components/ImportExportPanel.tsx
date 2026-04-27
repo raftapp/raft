@@ -432,7 +432,13 @@ export function ImportExportPanel({
                 <span
                   role="button"
                   tabIndex={importState.status === 'loading' ? -1 : 0}
-                  onClick={() => fileInputRef.current?.click()}
+                  onClick={(e) => {
+                    // The wrapping <label> also forwards clicks to the file
+                    // input, so without stopPropagation the picker opens
+                    // twice.
+                    e.stopPropagation()
+                    fileInputRef.current?.click()
+                  }}
                   onKeyDown={(e) => {
                     if (e.key === 'Enter' || e.key === ' ') {
                       e.preventDefault()

@@ -4,6 +4,16 @@ All notable changes to Raft will be documented in this file.
 
 Format based on [Keep a Changelog](https://keepachangelog.com/).
 
+## [1.1.3] - 2026-04-27
+
+### Added
+- Encrypted `.raftbundle` session sharing — pick **Encrypt & share** on any saved session to download a passphrase-protected bundle. Recipients drop the file into the import panel, enter the passphrase out-of-band, and pick which tabs to bring in. Reuses the same PBKDF2 (600K) + AES-256-GCM crypto as Cloud Sync, so the trust surface is unchanged. Zero servers, zero accounts, opt-in per export.
+
+### Internal
+- Extract `SyncProvider` interface so the sync engine no longer hard-codes the Google Drive provider (#8).
+- Introduce a `browser.*` adapter over `chrome.*` to make the background and shared modules testable and unblock future cross-browser work (#9).
+- Split `src/background/index.ts` into focused domain modules — alarms, messages, lifecycle, suspension wiring (#10).
+
 ## [1.1.2] - 2026-04-26
 
 ### Security
@@ -60,6 +70,7 @@ Initial release on Chrome Web Store.
 - Cloud Sync (Pro): client-side encrypted backup to Google Drive
 - Onboarding page for first-time users
 
+[1.1.3]: https://github.com/raftapp/raft/compare/v1.1.2...v1.1.3
 [1.1.2]: https://github.com/raftapp/raft/compare/v1.1.1...v1.1.2
 [1.1.1]: https://github.com/raftapp/raft/compare/v1.1.0...v1.1.1
 [1.1.0]: https://github.com/raftapp/raft/compare/v1.0.1...v1.1.0

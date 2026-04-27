@@ -694,7 +694,7 @@ export function ImportExportPanel({
           aria-modal="true"
           aria-labelledby="bundle-export-title"
         >
-          <div class="bg-white rounded-lg shadow-lg border border-raft-200 max-w-md w-full p-6">
+          <div class="bg-white rounded-lg shadow-lg border border-raft-200 max-w-lg w-full p-6">
             <h2 id="bundle-export-title" class="text-lg font-semibold text-raft-900 mb-1">
               Encrypted bundle for "{bundleExport.session.name}"
             </h2>

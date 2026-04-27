@@ -2,7 +2,7 @@
  * Shared constants for Raft
  */
 
-/** Storage keys for chrome.storage.local */
+/** Storage keys for browser.storage.local */
 export const STORAGE_KEYS = {
   /** User settings */
   SETTINGS: 'raft:settings',
@@ -26,7 +26,7 @@ export const STORAGE_KEYS = {
   LAST_SYNC_ERROR: 'raft:lastSyncError',
 } as const
 
-/** Storage keys for chrome.storage.sync (backup) */
+/** Storage keys for browser.storage.sync (backup) */
 export const SYNC_STORAGE_KEYS = {
   /** Manifest of synced sessions */
   MANIFEST: 'raft:sync:manifest',
@@ -48,7 +48,7 @@ export const SYNC_LIMITS = {
   QUOTA_SAFETY_MARGIN: 0.9,
 } as const
 
-/** Storage keys for chrome.storage.session (survives SW restarts, resets on browser restart) */
+/** Storage keys for browser.storage.session (survives SW restarts, resets on browser restart) */
 export const SESSION_KEYS = {
   /** Hibernation guard state for startup tab discarding */
   HIBERNATION_GUARD: 'raft:hibernationGuard',
@@ -76,7 +76,7 @@ export const SESSION_KEYS = {
  */
 export const HIBERNATION_GUARD_DURATION_MS = 30_000
 
-/** Alarm names for chrome.alarms */
+/** Alarm names for browser.alarms */
 export const ALARM_NAMES = {
   /** Periodic check for tabs to suspend */
   SUSPENSION_CHECK: 'raft:suspensionCheck',

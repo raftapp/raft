@@ -16,6 +16,7 @@ import { SkipLink, LiveRegion } from '@/shared/a11y'
 import { useFocusTrap, useFocusRestore, useAnnounce } from '@/shared/a11y'
 import { STORAGE_KEYS } from '@/shared/constants'
 import type { MessageResponse } from '@/shared/types'
+import { browser } from '@/shared/browser'
 
 interface TabCounts {
   total: number
@@ -37,7 +38,7 @@ interface CurrentTabStatus {
 }
 
 async function sendMessage<T>(message: unknown): Promise<T | null> {
-  const response = (await chrome.runtime.sendMessage(message)) as MessageResponse
+  const response = (await browser.runtime.sendMessage(message)) as MessageResponse
   if (response.success) {
     return response.data as T
   }
@@ -158,7 +159,7 @@ export function App() {
       // (backup and cloud sync are fire-and-forget during save)
       setTimeout(async () => {
         try {
-          const result = await chrome.storage.local.get([
+          const result = await browser.storage.local.get([
             STORAGE_KEYS.LAST_BACKUP_STATUS,
             STORAGE_KEYS.LAST_SYNC_ERROR,
           ])
@@ -379,7 +380,7 @@ export function App() {
 
         {/* Settings Button */}
         <button
-          onClick={() => chrome.runtime.openOptionsPage()}
+          onClick={() => browser.runtime.openOptionsPage()}
           class="w-8 h-8 rounded-lg bg-raft-100 text-raft-600 flex items-center justify-center hover:bg-raft-200 transition-colors shrink-0"
           title="Settings"
           aria-label="Open settings"
@@ -691,7 +692,7 @@ export function App() {
 
             {/* Backup Health */}
             <div class="mt-3 pt-3 border-t border-raft-200 flex justify-center">
-              <BackupHealthBadge onNavigate={() => chrome.runtime.openOptionsPage()} />
+              <BackupHealthBadge onNavigate={() => browser.runtime.openOptionsPage()} />
             </div>
           </div>
         </div>

@@ -8,6 +8,7 @@
 import { useState, useEffect, useCallback } from 'preact/hooks'
 import type { BackupHealthData, BackupLayerStatus, HealthLevel } from '@/shared/backupHealth'
 import { formatRelativeTime } from '@/shared/utils'
+import { browser } from '@/shared/browser'
 
 const LEVEL_STYLES: Record<
   HealthLevel,
@@ -52,7 +53,7 @@ export function BackupDashboard({ isPro, onNavigateTab }: BackupDashboardProps) 
 
   const loadHealth = useCallback(async () => {
     try {
-      const response = await chrome.runtime.sendMessage({ type: 'GET_BACKUP_HEALTH' })
+      const response = await browser.runtime.sendMessage({ type: 'GET_BACKUP_HEALTH' })
       if (response.success) {
         setHealth(response.data)
       }

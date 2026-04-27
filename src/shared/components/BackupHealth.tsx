@@ -7,6 +7,7 @@
 
 import { useState, useEffect } from 'preact/hooks'
 import type { BackupHealthData, HealthLevel } from '../backupHealth'
+import { browser } from '../browser'
 
 const HEALTH_COLORS: Record<HealthLevel, { icon: string; text: string }> = {
   good: { icon: 'text-green-500', text: 'text-green-700' },
@@ -25,7 +26,7 @@ export function BackupHealthBadge({ onNavigate }: BackupHealthBadgeProps) {
   useEffect(() => {
     const loadHealth = async () => {
       try {
-        const response = await chrome.runtime.sendMessage({ type: 'GET_BACKUP_HEALTH' })
+        const response = await browser.runtime.sendMessage({ type: 'GET_BACKUP_HEALTH' })
         if (response.success) {
           setHealth(response.data)
         }
@@ -72,7 +73,7 @@ export function BackupHealthBadge({ onNavigate }: BackupHealthBadgeProps) {
             if (topSuggestion.target && onNavigate) {
               onNavigate(topSuggestion.target)
             } else {
-              chrome.runtime.openOptionsPage()
+              browser.runtime.openOptionsPage()
             }
           }}
           class={`text-xs ${colors.text} hover:underline`}

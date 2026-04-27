@@ -12,6 +12,7 @@ import { formatRelativeTime } from '@/shared/utils'
 import { EncryptionSetup } from './EncryptionSetup'
 import { ProUpgrade } from './ProUpgrade'
 import { useFocusTrap, useFocusRestore } from '@/shared/a11y'
+import { browser } from '@/shared/browser'
 
 interface CloudSyncStatus extends SyncState {
   configured: boolean
@@ -94,8 +95,8 @@ export function CloudSyncPanel({
   const loadStatus = useCallback(async () => {
     try {
       const [statusResponse, settingsResponse] = await Promise.all([
-        chrome.runtime.sendMessage({ type: 'CLOUD_GET_STATUS' }),
-        chrome.runtime.sendMessage({ type: 'CLOUD_GET_SETTINGS' }),
+        browser.runtime.sendMessage({ type: 'CLOUD_GET_STATUS' }),
+        browser.runtime.sendMessage({ type: 'CLOUD_GET_SETTINGS' }),
       ])
 
       if (statusResponse.success) {
@@ -123,7 +124,7 @@ export function CloudSyncPanel({
 
     setConnecting(true)
     try {
-      const response = await chrome.runtime.sendMessage({ type: 'CLOUD_CONNECT' })
+      const response = await browser.runtime.sendMessage({ type: 'CLOUD_CONNECT' })
 
       if (!response.success) {
         onError(response.error || 'Failed to connect')
@@ -183,7 +184,7 @@ export function CloudSyncPanel({
     setRegenError('')
     setRegenLoading(true)
     try {
-      const response = await chrome.runtime.sendMessage({
+      const response = await browser.runtime.sendMessage({
         type: 'CLOUD_REGENERATE_RECOVERY_KEY',
         password: regenPassword,
       })
@@ -233,7 +234,7 @@ export function CloudSyncPanel({
     setRecoveryError('')
     setRecoveryLoading(true)
     try {
-      const response = await chrome.runtime.sendMessage({
+      const response = await browser.runtime.sendMessage({
         type: 'CLOUD_RECOVER_WITH_KEY',
         recoveryKey: recoveryKeyInput.trim(),
         newPassword: recoveryNewPassword,
@@ -279,7 +280,7 @@ export function CloudSyncPanel({
     setUnlockError('')
     setUnlocking(true)
     try {
-      const response = await chrome.runtime.sendMessage({
+      const response = await browser.runtime.sendMessage({
         type: 'CLOUD_UNLOCK',
         password: unlockPassword,
         tokens: pendingTokens?.tokens,
@@ -320,7 +321,7 @@ export function CloudSyncPanel({
     restoreDisconnectFocus()
     setDisconnecting(true)
     try {
-      const response = await chrome.runtime.sendMessage({
+      const response = await browser.runtime.sendMessage({
         type: 'CLOUD_DISCONNECT',
         deleteCloudData,
       })
@@ -342,7 +343,7 @@ export function CloudSyncPanel({
   const handleSync = async () => {
     setSyncing(true)
     try {
-      const response = await chrome.runtime.sendMessage({ type: 'CLOUD_SYNC' })
+      const response = await browser.runtime.sendMessage({ type: 'CLOUD_SYNC' })
       if (response.success) {
         const result = response.data
         onSuccess(
@@ -362,7 +363,7 @@ export function CloudSyncPanel({
   const handleReconnect = async () => {
     setReconnecting(true)
     try {
-      const response = await chrome.runtime.sendMessage({ type: 'CLOUD_RECONNECT' })
+      const response = await browser.runtime.sendMessage({ type: 'CLOUD_RECONNECT' })
       if (response.success) {
         onSuccess('Reconnected to Google Drive')
         loadStatus()
@@ -380,14 +381,14 @@ export function CloudSyncPanel({
     if (!confirm('Are you sure you want to remove your license from this device?')) {
       return
     }
-    await chrome.runtime.sendMessage({ type: 'PRO_CLEAR_LICENSE' })
+    await browser.runtime.sendMessage({ type: 'PRO_CLEAR_LICENSE' })
     onProStatusChange()
   }
 
   const handleSettingChange = async (updates: Partial<CloudSyncSettings>) => {
     const updated = { ...settings, ...updates }
     setSettings(updated)
-    await chrome.runtime.sendMessage({ type: 'CLOUD_UPDATE_SETTINGS', settings: updates })
+    await browser.runtime.sendMessage({ type: 'CLOUD_UPDATE_SETTINGS', settings: updates })
   }
 
   if (loading) {

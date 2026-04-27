@@ -9,6 +9,7 @@ import { render } from 'preact'
 import { Otter } from '@/shared/components/Otter'
 import { SkipLink } from '@/shared/a11y'
 import './styles.css'
+import { browser } from '@/shared/browser'
 
 function FeatureItem({
   icon,
@@ -38,10 +39,10 @@ function FeatureItem({
 function App() {
   const handleGetStarted = () => {
     // Mark onboarding as complete
-    chrome.storage.local.set({ onboardingComplete: true })
+    browser.storage.local.set({ onboardingComplete: true })
     // Navigate to options page instead of closing immediately
     // This allows users to reference onboarding info and configure settings
-    chrome.runtime.openOptionsPage()
+    browser.runtime.openOptionsPage()
   }
 
   return (

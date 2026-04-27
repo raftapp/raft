@@ -10,7 +10,7 @@ import type { Session } from '../types'
 export type CloudProvider = 'gdrive'
 
 /**
- * OAuth tokens stored in chrome.storage
+ * OAuth tokens stored in browser.storage
  */
 export interface CloudTokens {
   accessToken: string
@@ -33,7 +33,7 @@ export interface CloudCredentials {
 }
 
 /**
- * Encryption key material (stored encrypted in chrome.storage)
+ * Encryption key material (stored encrypted in browser.storage)
  */
 export interface EncryptionKeyData {
   /** PBKDF2 salt (base64) */

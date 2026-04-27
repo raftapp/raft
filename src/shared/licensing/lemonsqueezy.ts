@@ -12,6 +12,7 @@
 
 import { LEMONSQUEEZY, LICENSE_STORAGE_KEY } from '../constants'
 import { storage } from '../storage'
+import { browser } from '../browser'
 
 /**
  * Stored license data
@@ -112,7 +113,7 @@ export async function getStoredLicense(): Promise<LicenseData | null> {
 async function saveLicense(license: LicenseData): Promise<void> {
   await storage.set(LICENSE_STORAGE_KEY, license)
   // Also save to sync storage so it syncs across devices
-  await chrome.storage.sync.set({ [LICENSE_STORAGE_KEY]: license })
+  await browser.storage.sync.set({ [LICENSE_STORAGE_KEY]: license })
 }
 
 /**
@@ -155,14 +156,14 @@ export async function clearLicense(): Promise<void> {
     await deactivateLicense(stored.key, stored.instanceId)
   }
   await storage.remove(LICENSE_STORAGE_KEY)
-  await chrome.storage.sync.remove(LICENSE_STORAGE_KEY)
+  await browser.storage.sync.remove(LICENSE_STORAGE_KEY)
 }
 
 /**
  * Try to restore license from sync storage (for new installs)
  */
 export async function restoreLicenseFromSync(): Promise<LicenseData | null> {
-  const result = await chrome.storage.sync.get(LICENSE_STORAGE_KEY)
+  const result = await browser.storage.sync.get(LICENSE_STORAGE_KEY)
   const synced = result[LICENSE_STORAGE_KEY] as LicenseData | undefined
 
   if (synced?.key) {
@@ -296,7 +297,7 @@ export async function checkLicense(): Promise<{ isPro: boolean; email?: string }
  */
 export function openCheckoutPage(): void {
   // Open checkout in new tab
-  chrome.tabs.create({ url: LEMONSQUEEZY.CHECKOUT_URL })
+  browser.tabs.create({ url: LEMONSQUEEZY.CHECKOUT_URL })
 }
 
 /**

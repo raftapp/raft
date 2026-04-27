@@ -9,6 +9,7 @@ import { useState, useEffect } from 'preact/hooks'
 import { allScenarios } from '@/devtools/scenarios'
 import type { DevScenario } from '@/devtools/types'
 import { DEV_PRO_OVERRIDE_KEY } from '@/shared/constants'
+import { browser } from '@/shared/browser'
 
 interface DevToolsPanelProps {
   onSuccess: (message: string) => void
@@ -23,7 +24,7 @@ export function DevToolsPanel({ onSuccess, onError }: DevToolsPanelProps) {
   // Load test window count on mount and after changes
   const loadTestWindowCount = async () => {
     try {
-      const response = await chrome.runtime.sendMessage({ type: 'DEV_GET_TEST_WINDOW_IDS' })
+      const response = await browser.runtime.sendMessage({ type: 'DEV_GET_TEST_WINDOW_IDS' })
       if (response.success) {
         setTestWindowCount(response.data.windowIds.length)
       }
@@ -34,7 +35,7 @@ export function DevToolsPanel({ onSuccess, onError }: DevToolsPanelProps) {
 
   useEffect(() => {
     loadTestWindowCount()
-    chrome.storage.local.get(DEV_PRO_OVERRIDE_KEY).then((result) => {
+    browser.storage.local.get(DEV_PRO_OVERRIDE_KEY).then((result) => {
       setProOverride(!!result[DEV_PRO_OVERRIDE_KEY])
     })
   }, [])
@@ -42,9 +43,9 @@ export function DevToolsPanel({ onSuccess, onError }: DevToolsPanelProps) {
   const handleProOverrideToggle = async () => {
     const newValue = !proOverride
     if (newValue) {
-      await chrome.storage.local.set({ [DEV_PRO_OVERRIDE_KEY]: true })
+      await browser.storage.local.set({ [DEV_PRO_OVERRIDE_KEY]: true })
     } else {
-      await chrome.storage.local.remove(DEV_PRO_OVERRIDE_KEY)
+      await browser.storage.local.remove(DEV_PRO_OVERRIDE_KEY)
     }
     setProOverride(newValue)
     onSuccess(newValue ? 'Pro override enabled' : 'Pro override disabled')
@@ -53,7 +54,7 @@ export function DevToolsPanel({ onSuccess, onError }: DevToolsPanelProps) {
   const handleCreateScenario = async (scenario: DevScenario) => {
     setIsLoading(scenario.id)
     try {
-      const response = await chrome.runtime.sendMessage({
+      const response = await browser.runtime.sendMessage({
         type: 'DEV_CREATE_SCENARIO',
         scenario,
       })
@@ -73,7 +74,7 @@ export function DevToolsPanel({ onSuccess, onError }: DevToolsPanelProps) {
   const handleCleanup = async () => {
     setIsLoading('cleanup')
     try {
-      const response = await chrome.runtime.sendMessage({ type: 'DEV_CLEANUP_TEST_WINDOWS' })
+      const response = await browser.runtime.sendMessage({ type: 'DEV_CLEANUP_TEST_WINDOWS' })
       if (response.success) {
         onSuccess(`Closed ${response.data.closedCount} test windows`)
         loadTestWindowCount()

@@ -4,10 +4,11 @@
  * MV3 service workers are terminated after ~30 seconds of inactivity.
  * This means:
  * - No persistent in-memory state
- * - Everything must be stored in chrome.storage
+ * - Everything must be stored in browser.storage
  * - Re-register alarms and listeners on every wake
  */
 
+import { browser } from '@/shared/browser'
 import { settingsStorage, tabActivityStorage, sessionsStorage, storage } from '@/shared/storage'
 import {
   ALARM_NAMES,
@@ -97,7 +98,7 @@ import { getDuplicateCount, closeDuplicates } from './deduplication'
 
 // Track previously active tab per window (for activity-on-leave tracking)
 // When user switches away from a tab, we touch it to record the departure time
-// NOTE: This is persisted to chrome.storage to survive service worker restarts
+// NOTE: This is persisted to browser.storage to survive service worker restarts
 let previousActiveTab: Map<number, number> = new Map() // windowId → tabId
 
 // Initialization promise - listeners wait on this before accessing state
@@ -149,7 +150,7 @@ async function savePreviousActiveTabs(): Promise<void> {
  * PWA, onStartup runs before any normal browser window exists. The regular
  * window gets restored later — AFTER onStartup has already finished. That
  * window's tabs never saw the initial discard pass, so `hibernateWindow()`
- * (called from chrome.windows.onCreated during the guard window) sweeps
+ * (called from browser.windows.onCreated during the guard window) sweeps
  * them up too.
  *
  * The 30s HIBERNATION_GUARD_DURATION_MS was tuned empirically against
@@ -157,26 +158,26 @@ async function savePreviousActiveTabs(): Promise<void> {
  * the PWA path — shorter windows regress #6.
  */
 async function maybeHibernateTab(tabId: number): Promise<void> {
-  const result = await chrome.storage.session.get(SESSION_KEYS.HIBERNATION_GUARD)
+  const result = await browser.storage.session.get(SESSION_KEYS.HIBERNATION_GUARD)
   const guard = result[SESSION_KEYS.HIBERNATION_GUARD] as
     | { expiresAt: number; tabIds: number[] }
     | undefined
   if (!guard) return
 
   if (Date.now() > guard.expiresAt) {
-    await chrome.storage.session.remove(SESSION_KEYS.HIBERNATION_GUARD)
+    await browser.storage.session.remove(SESSION_KEYS.HIBERNATION_GUARD)
     return
   }
 
   if (!guard.tabIds.includes(tabId)) return
 
-  const tab = await chrome.tabs.get(tabId)
+  const tab = await browser.tabs.get(tabId)
   if (tab.active) return
   if (tab.discarded) return
 
   console.log(`[Raft] Hibernation guard: discarding tab ${tabId} (${tab.url})`)
   try {
-    await chrome.tabs.discard(tabId)
+    await browser.tabs.discard(tabId)
   } catch (e) {
     console.warn(`[Raft] Hibernation guard: failed to discard tab ${tabId}:`, e)
   }
@@ -191,16 +192,16 @@ async function hibernateWindow(windowId: number): Promise<void> {
   const settings = await settingsStorage.get()
   if (!settings.suspension.hibernateOnStartup) return
 
-  const extensionOrigin = chrome.runtime.getURL('')
-  const winTabs = await chrome.tabs.query({ windowId })
+  const extensionOrigin = browser.runtime.getURL('')
+  const winTabs = await browser.tabs.query({ windowId })
 
   // Open a Raft page as the active tab so we can discard the user's active tab
   const raftTab = winTabs.find((t) => t.url?.startsWith(extensionOrigin))
   if (raftTab?.id) {
-    await chrome.tabs.update(raftTab.id, { active: true })
+    await browser.tabs.update(raftTab.id, { active: true })
   } else {
-    await chrome.tabs.create({
-      url: chrome.runtime.getURL('src/options/index.html#sessions'),
+    await browser.tabs.create({
+      url: browser.runtime.getURL('src/options/index.html#sessions'),
       active: true,
       windowId,
     })
@@ -298,7 +299,7 @@ export type { MessageResponse }
  * Only touches tabs that aren't already being tracked
  */
 async function initializeTabActivity(): Promise<void> {
-  const tabs = await chrome.tabs.query({})
+  const tabs = await browser.tabs.query({})
   const activity = await tabActivityStorage.getAll()
 
   let initialized = 0
@@ -330,7 +331,7 @@ async function initialize(): Promise<void> {
 
   // Populate initial active tabs per window (for activity-on-leave tracking)
   // This handles service worker restart after termination
-  const windows = await chrome.windows.getAll({ populate: true })
+  const windows = await browser.windows.getAll({ populate: true })
   let needsSave = false
   for (const window of windows) {
     if (window.id !== undefined && window.tabs) {
@@ -382,8 +383,8 @@ async function initialize(): Promise<void> {
  * Set up the suspension check alarm
  */
 async function setupSuspensionAlarm(): Promise<void> {
-  await chrome.alarms.clear(ALARM_NAMES.SUSPENSION_CHECK)
-  await chrome.alarms.create(ALARM_NAMES.SUSPENSION_CHECK, {
+  await browser.alarms.clear(ALARM_NAMES.SUSPENSION_CHECK)
+  await browser.alarms.create(ALARM_NAMES.SUSPENSION_CHECK, {
     periodInMinutes: SUSPENSION_CHECK_INTERVAL_MINUTES,
   })
 }
@@ -392,8 +393,8 @@ async function setupSuspensionAlarm(): Promise<void> {
  * Set up the auto-save alarm
  */
 async function setupAutoSaveAlarm(intervalMinutes: number): Promise<void> {
-  await chrome.alarms.clear(ALARM_NAMES.AUTO_SAVE)
-  await chrome.alarms.create(ALARM_NAMES.AUTO_SAVE, {
+  await browser.alarms.clear(ALARM_NAMES.AUTO_SAVE)
+  await browser.alarms.create(ALARM_NAMES.AUTO_SAVE, {
     periodInMinutes: intervalMinutes,
   })
 }
@@ -402,8 +403,8 @@ async function setupAutoSaveAlarm(intervalMinutes: number): Promise<void> {
  * Set up the cloud sync alarm
  */
 async function setupCloudSyncAlarm(intervalMinutes: number): Promise<void> {
-  await chrome.alarms.clear(ALARM_NAMES.CLOUD_SYNC)
-  await chrome.alarms.create(ALARM_NAMES.CLOUD_SYNC, {
+  await browser.alarms.clear(ALARM_NAMES.CLOUD_SYNC)
+  await browser.alarms.create(ALARM_NAMES.CLOUD_SYNC, {
     periodInMinutes: intervalMinutes,
   })
 }
@@ -412,8 +413,8 @@ async function setupCloudSyncAlarm(intervalMinutes: number): Promise<void> {
  * Set up the recovery snapshot alarm
  */
 async function setupRecoverySnapshotAlarm(): Promise<void> {
-  await chrome.alarms.clear(ALARM_NAMES.RECOVERY_SNAPSHOT)
-  await chrome.alarms.create(ALARM_NAMES.RECOVERY_SNAPSHOT, {
+  await browser.alarms.clear(ALARM_NAMES.RECOVERY_SNAPSHOT)
+  await browser.alarms.create(ALARM_NAMES.RECOVERY_SNAPSHOT, {
     periodInMinutes: RECOVERY_CONFIG.INTERVAL_MINUTES,
   })
 }
@@ -422,8 +423,8 @@ async function setupRecoverySnapshotAlarm(): Promise<void> {
  * Set up the export reminder alarm (runs daily to check if reminder is due)
  */
 async function setupExportReminderAlarm(): Promise<void> {
-  await chrome.alarms.clear(ALARM_NAMES.EXPORT_REMINDER)
-  await chrome.alarms.create(ALARM_NAMES.EXPORT_REMINDER, {
+  await browser.alarms.clear(ALARM_NAMES.EXPORT_REMINDER)
+  await browser.alarms.create(ALARM_NAMES.EXPORT_REMINDER, {
     periodInMinutes: 60 * 24, // Check once per day
     delayInMinutes: 60, // First check after 1 hour
   })
@@ -513,19 +514,19 @@ async function checkExportReminder(): Promise<void> {
  */
 async function setupContextMenus(): Promise<void> {
   // Remove existing menus first
-  await chrome.contextMenus.removeAll()
+  await browser.contextMenus.removeAll()
 
   // Add "Suspend this tab" menu item
   try {
-    chrome.contextMenus.create(
+    browser.contextMenus.create(
       {
         id: 'suspend-tab',
         title: 'Suspend this tab',
         contexts: ['page'],
       },
       () => {
-        if (chrome.runtime.lastError) {
-          console.warn('[Raft] Failed to create suspend-tab menu:', chrome.runtime.lastError)
+        if (browser.runtime.lastError) {
+          console.warn('[Raft] Failed to create suspend-tab menu:', browser.runtime.lastError)
         }
       }
     )
@@ -535,15 +536,18 @@ async function setupContextMenus(): Promise<void> {
 
   // Add "Suspend other tabs" menu item
   try {
-    chrome.contextMenus.create(
+    browser.contextMenus.create(
       {
         id: 'suspend-other-tabs',
         title: 'Suspend other tabs in window',
         contexts: ['page'],
       },
       () => {
-        if (chrome.runtime.lastError) {
-          console.warn('[Raft] Failed to create suspend-other-tabs menu:', chrome.runtime.lastError)
+        if (browser.runtime.lastError) {
+          console.warn(
+            '[Raft] Failed to create suspend-other-tabs menu:',
+            browser.runtime.lastError
+          )
         }
       }
     )
@@ -559,15 +563,15 @@ async function updateBadge(): Promise<void> {
   const settings = await settingsStorage.get()
 
   if (!settings.ui.showBadge) {
-    await chrome.action.setBadgeText({ text: '' })
+    await browser.action.setBadgeText({ text: '' })
     return
   }
 
   const counts = await getTabCounts()
   const text = counts.suspended > 0 ? counts.suspended.toString() : ''
 
-  await chrome.action.setBadgeText({ text })
-  await chrome.action.setBadgeBackgroundColor({ color: '#c07a42' }) // raft-500
+  await browser.action.setBadgeText({ text })
+  await browser.action.setBadgeBackgroundColor({ color: '#c07a42' }) // raft-500
 }
 
 // ============================================================================
@@ -577,14 +581,14 @@ async function updateBadge(): Promise<void> {
 /**
  * Handle alarm events
  */
-chrome.alarms.onAlarm.addListener(async (alarm) => {
+browser.alarms.onAlarm.addListener(async (alarm) => {
   switch (alarm.name) {
     case ALARM_NAMES.SUSPENSION_CHECK: {
       await checkForInactiveTabs()
       await updateBadge()
 
       // Periodically clean up orphaned tab activity records
-      const tabs = await chrome.tabs.query({})
+      const tabs = await browser.tabs.query({})
       const tabIds = new Set(tabs.map((t) => t.id).filter((id): id is number => id !== undefined))
       await tabActivityStorage.cleanup(tabIds)
       break
@@ -619,7 +623,7 @@ chrome.alarms.onAlarm.addListener(async (alarm) => {
  * Key insight: We track when the user LEAVES a tab, not when they arrive.
  * This ensures tabs aren't suspended until X minutes after departure.
  */
-chrome.tabs.onActivated.addListener(async (activeInfo) => {
+browser.tabs.onActivated.addListener(async (activeInfo) => {
   await initReady
 
   // Touch the PREVIOUS active tab (the one user just left)
@@ -638,7 +642,7 @@ chrome.tabs.onActivated.addListener(async (activeInfo) => {
 /**
  * Track tab updates (URL changes, discard state changes, etc.)
  */
-chrome.tabs.onUpdated.addListener(async (tabId, changeInfo) => {
+browser.tabs.onUpdated.addListener(async (tabId, changeInfo) => {
   // Hibernation guard: discard tabs that loaded during startup window
   if (changeInfo.status === 'complete' || changeInfo.discarded === false) {
     await maybeHibernateTab(tabId)
@@ -665,7 +669,7 @@ chrome.tabs.onUpdated.addListener(async (tabId, changeInfo) => {
 /**
  * Clean up activity tracking when tabs are closed
  */
-chrome.tabs.onRemoved.addListener(async (tabId) => {
+browser.tabs.onRemoved.addListener(async (tabId) => {
   await tabActivityStorage.remove(tabId)
   await updateBadge()
 })
@@ -675,7 +679,7 @@ chrome.tabs.onRemoved.addListener(async (tabId) => {
  * window, hibernate its tabs. This handles the case where a PWA starts Chrome
  * first (triggering onStartup before the regular window exists).
  */
-chrome.windows.onCreated.addListener(async (win) => {
+browser.windows.onCreated.addListener(async (win) => {
   if (win.type !== 'normal' || !win.id) return
   await initReady
 
@@ -685,7 +689,7 @@ chrome.windows.onCreated.addListener(async (win) => {
   // Only hibernate the first normal window — this is effectively a "startup"
   // for the browser UI (e.g., PWA kept Chrome alive, user opens a browser window).
   // If other normal windows already exist, this is just a new window (Ctrl+N).
-  const normalWindows = await chrome.windows.getAll()
+  const normalWindows = await browser.windows.getAll()
   const normalCount = normalWindows.filter((w) => w.type === 'normal').length
   if (normalCount > 1) return
 
@@ -698,7 +702,7 @@ chrome.windows.onCreated.addListener(async (win) => {
 /**
  * Clean up previousActiveTab tracking when windows are closed
  */
-chrome.windows.onRemoved.addListener(async (windowId) => {
+browser.windows.onRemoved.addListener(async (windowId) => {
   await initReady
   previousActiveTab.delete(windowId)
   await savePreviousActiveTabs()
@@ -707,7 +711,7 @@ chrome.windows.onRemoved.addListener(async (windowId) => {
 /**
  * Handle context menu clicks
  */
-chrome.contextMenus.onClicked.addListener(async (info, tab) => {
+browser.contextMenus.onClicked.addListener(async (info, tab) => {
   if (!tab?.id) return
 
   switch (info.menuItemId) {
@@ -726,9 +730,9 @@ chrome.contextMenus.onClicked.addListener(async (info, tab) => {
 /**
  * Handle messages from popup and other extension pages
  */
-chrome.runtime.onMessage.addListener((message: MessageType, sender, sendResponse) => {
+browser.runtime.onMessage.addListener((message: MessageType, sender, sendResponse) => {
   // Only accept messages from our own extension
-  if (sender.id !== chrome.runtime.id) {
+  if (sender.id !== browser.runtime.id) {
     sendResponse({ success: false, error: 'Unauthorized sender' })
     return true
   }
@@ -752,7 +756,7 @@ chrome.runtime.onMessage.addListener((message: MessageType, sender, sendResponse
 async function getTestWindowIds(): Promise<number[]> {
   const windowIds = await storage.get<number[]>(DEV_TEST_WINDOWS_KEY, [])
   // Filter out any windows that no longer exist
-  const existingWindows = await chrome.windows.getAll()
+  const existingWindows = await browser.windows.getAll()
   const existingIds = new Set(existingWindows.map((w) => w.id))
   const validIds = windowIds.filter((id) => existingIds.has(id))
   // Update storage if some windows were closed
@@ -783,7 +787,7 @@ async function createDevScenario(
 
   for (const windowSpec of scenario.windows) {
     // Create window with about:blank
-    const createdWindow = await chrome.windows.create({
+    const createdWindow = await browser.windows.create({
       url: 'about:blank',
       focused: windowSpec.focused ?? false,
     })
@@ -793,13 +797,13 @@ async function createDevScenario(
     await addTestWindowId(windowId)
 
     // Get the initial blank tab to remove later
-    const initialTabs = await chrome.tabs.query({ windowId })
+    const initialTabs = await browser.tabs.query({ windowId })
     const blankTabId = initialTabs[0]?.id
 
     // Create ungrouped tabs
     if (windowSpec.tabs) {
       for (const tabSpec of windowSpec.tabs) {
-        await chrome.tabs.create({
+        await browser.tabs.create({
           windowId,
           url: tabSpec.url,
           pinned: tabSpec.pinned ?? false,
@@ -816,7 +820,7 @@ async function createDevScenario(
 
         // Create tabs for this group
         for (const tabSpec of groupSpec.tabs) {
-          const tab = await chrome.tabs.create({
+          const tab = await browser.tabs.create({
             windowId,
             url: tabSpec.url,
             pinned: tabSpec.pinned ?? false,
@@ -832,15 +836,15 @@ async function createDevScenario(
         if (tabIds.length > 0) {
           // Cast to the required tuple type
           const tabIdsForGroup = tabIds as [number, ...number[]]
-          const groupId = await chrome.tabs.group({
+          const groupId = await browser.tabs.group({
             tabIds: tabIdsForGroup,
             createProperties: { windowId },
           })
 
           // Update group properties
-          await chrome.tabGroups.update(groupId, {
+          await browser.tabGroups.update(groupId, {
             title: groupSpec.title,
-            color: groupSpec.color as chrome.tabGroups.Color,
+            color: groupSpec.color as browser.tabGroups.Color,
             collapsed: groupSpec.collapsed ?? false,
           })
         }
@@ -850,7 +854,7 @@ async function createDevScenario(
     // Remove the initial blank tab
     if (blankTabId) {
       try {
-        await chrome.tabs.remove(blankTabId)
+        await browser.tabs.remove(blankTabId)
       } catch {
         // Tab may already be closed
       }
@@ -869,7 +873,7 @@ async function cleanupTestWindows(): Promise<{ closedCount: number }> {
 
   for (const windowId of windowIds) {
     try {
-      await chrome.windows.remove(windowId)
+      await browser.windows.remove(windowId)
       closedCount++
     } catch {
       // Window may already be closed
@@ -921,7 +925,7 @@ async function handleMessage(message: MessageType): Promise<MessageResponse> {
       }
 
       case 'GET_CURRENT_TAB_STATUS': {
-        const [tab] = await chrome.tabs.query({ active: true, currentWindow: true })
+        const [tab] = await browser.tabs.query({ active: true, currentWindow: true })
         if (!tab) {
           return { success: false, error: 'No active tab' }
         }
@@ -956,19 +960,19 @@ async function handleMessage(message: MessageType): Promise<MessageResponse> {
         if (settings.suspension.enabled) {
           await setupSuspensionAlarm()
         } else {
-          await chrome.alarms.clear(ALARM_NAMES.SUSPENSION_CHECK)
+          await browser.alarms.clear(ALARM_NAMES.SUSPENSION_CHECK)
         }
 
         if (settings.autoSave.enabled) {
           await setupAutoSaveAlarm(settings.autoSave.intervalMinutes)
         } else {
-          await chrome.alarms.clear(ALARM_NAMES.AUTO_SAVE)
+          await browser.alarms.clear(ALARM_NAMES.AUTO_SAVE)
         }
 
         if (settings.exportReminder.enabled) {
           await setupExportReminderAlarm()
         } else {
-          await chrome.alarms.clear(ALARM_NAMES.EXPORT_REMINDER)
+          await browser.alarms.clear(ALARM_NAMES.EXPORT_REMINDER)
         }
 
         await updateBadge()
@@ -1301,7 +1305,7 @@ async function handleMessage(message: MessageType): Promise<MessageResponse> {
         await clearAllCloudSyncData()
 
         // Cancel sync alarm
-        await chrome.alarms.clear(ALARM_NAMES.CLOUD_SYNC)
+        await browser.alarms.clear(ALARM_NAMES.CLOUD_SYNC)
 
         return { success: true }
       }
@@ -1376,14 +1380,14 @@ async function handleMessage(message: MessageType): Promise<MessageResponse> {
         if (settings.enabled) {
           await setupCloudSyncAlarm(settings.intervalMinutes)
         } else {
-          await chrome.alarms.clear(ALARM_NAMES.CLOUD_SYNC)
+          await browser.alarms.clear(ALARM_NAMES.CLOUD_SYNC)
         }
 
         return { success: true, data: settings }
       }
 
       case 'CLOUD_GET_SYNCED_IDS': {
-        const result = await chrome.storage.local.get(CLOUD_SYNC_KEYS.SYNCED_IDS)
+        const result = await browser.storage.local.get(CLOUD_SYNC_KEYS.SYNCED_IDS)
         const ids = (result[CLOUD_SYNC_KEYS.SYNCED_IDS] as string[] | undefined) ?? []
         return { success: true, data: ids }
       }
@@ -1596,7 +1600,7 @@ async function handleMessage(message: MessageType): Promise<MessageResponse> {
 /**
  * Handle extension install/update
  */
-chrome.runtime.onInstalled.addListener(async (details) => {
+browser.runtime.onInstalled.addListener(async (details) => {
   console.log('[Raft] Extension installed/updated:', details.reason)
 
   if (details.reason === 'install') {
@@ -1629,8 +1633,8 @@ chrome.runtime.onInstalled.addListener(async (details) => {
     }
 
     // Open onboarding page for new users
-    const onboardingUrl = chrome.runtime.getURL('src/onboarding/index.html')
-    chrome.tabs.create({ url: onboardingUrl })
+    const onboardingUrl = browser.runtime.getURL('src/onboarding/index.html')
+    browser.tabs.create({ url: onboardingUrl })
   } else if (details.reason === 'update') {
     console.log('[Raft] Updated from version:', details.previousVersion)
 
@@ -1660,27 +1664,27 @@ chrome.runtime.onInstalled.addListener(async (details) => {
 /**
  * Handle service worker startup (wake from termination)
  */
-chrome.runtime.onStartup.addListener(async () => {
+browser.runtime.onStartup.addListener(async () => {
   // Don't call initialize() here - it runs at the bottom of the script
   await initReady
   const settings = await settingsStorage.get()
   if (settings.suspension.hibernateOnStartup) {
     console.log('[Raft] Hibernate on startup enabled, suspending all tabs')
-    const allWindows = await chrome.windows.getAll()
+    const allWindows = await browser.windows.getAll()
     const windows = allWindows.filter((w) => w.type === 'normal')
-    const extensionOrigin = chrome.runtime.getURL('')
+    const extensionOrigin = browser.runtime.getURL('')
     const hibernateTabIds: number[] = []
     for (const win of windows) {
       if (!win.id) continue
-      // We need a Raft extension page as the active tab so chrome.tabs.discard()
+      // We need a Raft extension page as the active tab so browser.tabs.discard()
       // can suspend the user's previously-active tab. Reuse one if already open.
-      const winTabs = await chrome.tabs.query({ windowId: win.id })
+      const winTabs = await browser.tabs.query({ windowId: win.id })
       const raftTab = winTabs.find((t) => t.url?.startsWith(extensionOrigin))
       if (raftTab?.id) {
-        await chrome.tabs.update(raftTab.id, { active: true })
+        await browser.tabs.update(raftTab.id, { active: true })
       } else {
-        await chrome.tabs.create({
-          url: chrome.runtime.getURL('src/options/index.html#sessions'),
+        await browser.tabs.create({
+          url: browser.runtime.getURL('src/options/index.html#sessions'),
           active: true,
           windowId: win.id,
         })
@@ -1703,7 +1707,7 @@ chrome.runtime.onStartup.addListener(async () => {
     // Guard catches tabs that couldn't be discarded yet (no main frame),
     // tabs Chrome's startup loader undiscards, and normal windows that
     // appear after onStartup (e.g., PWA started Chrome first)
-    await chrome.storage.session.set({
+    await browser.storage.session.set({
       [SESSION_KEYS.HIBERNATION_GUARD]: {
         expiresAt: Date.now() + HIBERNATION_GUARD_DURATION_MS,
         tabIds: hibernateTabIds,
@@ -1716,10 +1720,10 @@ chrome.runtime.onStartup.addListener(async () => {
 })
 
 // Handle keyboard commands
-chrome.commands.onCommand.addListener(async (command) => {
+browser.commands.onCommand.addListener(async (command) => {
   switch (command) {
     case 'suspend-current-tab': {
-      const [tab] = await chrome.tabs.query({ active: true, currentWindow: true })
+      const [tab] = await browser.tabs.query({ active: true, currentWindow: true })
       if (tab?.id) {
         await suspendTab(tab.id)
         await updateBadge()
@@ -1728,7 +1732,7 @@ chrome.commands.onCommand.addListener(async (command) => {
     }
 
     case 'suspend-other-tabs': {
-      const window = await chrome.windows.getCurrent()
+      const window = await browser.windows.getCurrent()
       await suspendOtherTabs(window.id)
       await updateBadge()
       break

@@ -12,6 +12,7 @@
 import { settingsStorage, tabActivityStorage } from '@/shared/storage'
 import { PROTECTED_URL_PATTERNS } from '@/shared/constants'
 import type { Settings } from '@/shared/types'
+import { browser } from '@/shared/browser'
 
 /**
  * Result of checking if a tab can be suspended
@@ -64,7 +65,7 @@ function matchesWhitelist(url: string, whitelist: string[]): boolean {
  * Check if a tab can be suspended based on protection rules
  */
 export async function canSuspendTab(
-  tab: chrome.tabs.Tab,
+  tab: browser.tabs.Tab,
   settings?: Settings
 ): Promise<SuspensionCheck> {
   const s = settings ?? (await settingsStorage.get())
@@ -108,7 +109,7 @@ export async function canSuspendTab(
  */
 export async function suspendTab(tabId: number): Promise<boolean> {
   try {
-    const tab = await chrome.tabs.get(tabId)
+    const tab = await browser.tabs.get(tabId)
     const check = await canSuspendTab(tab)
 
     if (!check.canSuspend) {
@@ -116,7 +117,7 @@ export async function suspendTab(tabId: number): Promise<boolean> {
     }
 
     // Use native discard API
-    const discardedTab = await chrome.tabs.discard(tabId)
+    const discardedTab = await browser.tabs.discard(tabId)
 
     if (discardedTab?.discarded) {
       return true
@@ -132,8 +133,8 @@ export async function suspendTab(tabId: number): Promise<boolean> {
  * Suspend all other tabs in the current window
  */
 export async function suspendOtherTabs(windowId?: number): Promise<number> {
-  const targetWindowId = windowId ?? (await chrome.windows.getCurrent()).id
-  const tabs = await chrome.tabs.query({ windowId: targetWindowId })
+  const targetWindowId = windowId ?? (await browser.windows.getCurrent()).id
+  const tabs = await browser.tabs.query({ windowId: targetWindowId })
   const settings = await settingsStorage.get()
 
   let suspended = 0
@@ -152,12 +153,12 @@ export async function suspendOtherTabs(windowId?: number): Promise<number> {
 
 /**
  * Suspend all non-active tabs across all windows.
- * Active tabs are skipped because chrome.tabs.discard() cannot discard the active tab.
+ * Active tabs are skipped because browser.tabs.discard() cannot discard the active tab.
  * For startup hibernation (which needs to suspend active tabs too), the onStartup
  * handler opens a Raft page as the active tab first, then uses suspendOtherTabs().
  */
 export async function suspendAllTabs(): Promise<number> {
-  const windows = await chrome.windows.getAll({ populate: true })
+  const windows = await browser.windows.getAll({ populate: true })
   const settings = await settingsStorage.get()
   let suspended = 0
 
@@ -193,7 +194,7 @@ export async function checkForInactiveTabs(): Promise<number> {
   const cutoff = now - inactivityMs
 
   const activity = await tabActivityStorage.getAll()
-  const tabs = await chrome.tabs.query({})
+  const tabs = await browser.tabs.query({})
 
   let suspended = 0
   for (const tab of tabs) {
@@ -226,9 +227,9 @@ export async function checkForInactiveTabs(): Promise<number> {
  */
 export async function getWindowTabsStatus(
   windowId?: number
-): Promise<Array<{ tab: chrome.tabs.Tab; canSuspend: boolean; reason?: string }>> {
-  const targetWindowId = windowId ?? (await chrome.windows.getCurrent()).id
-  const tabs = await chrome.tabs.query({ windowId: targetWindowId })
+): Promise<Array<{ tab: browser.tabs.Tab; canSuspend: boolean; reason?: string }>> {
+  const targetWindowId = windowId ?? (await browser.windows.getCurrent()).id
+  const tabs = await browser.tabs.query({ windowId: targetWindowId })
   const settings = await settingsStorage.get()
 
   const results = []
@@ -252,7 +253,7 @@ export async function getTabCounts(): Promise<{
   suspended: number
   suspendable: number
 }> {
-  const tabs = await chrome.tabs.query({})
+  const tabs = await browser.tabs.query({})
   const settings = await settingsStorage.get()
 
   let suspended = 0
@@ -280,14 +281,14 @@ export async function getTabCounts(): Promise<{
  * Restore all suspended tabs in a window by reloading them
  */
 export async function restoreAllTabs(windowId?: number): Promise<number> {
-  const targetWindowId = windowId ?? (await chrome.windows.getCurrent()).id
-  const tabs = await chrome.tabs.query({ windowId: targetWindowId, discarded: true })
+  const targetWindowId = windowId ?? (await browser.windows.getCurrent()).id
+  const tabs = await browser.tabs.query({ windowId: targetWindowId, discarded: true })
 
   let restored = 0
   for (const tab of tabs) {
     if (tab.id) {
       try {
-        await chrome.tabs.reload(tab.id)
+        await browser.tabs.reload(tab.id)
         restored++
       } catch (error) {
         console.warn(`[Raft] Failed to reload tab ${tab.id}:`, error)

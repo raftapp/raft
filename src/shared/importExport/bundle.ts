@@ -309,8 +309,35 @@ export function generateBundlePassphrase(): string {
     'zephyr',
   ]
 
-  const buf = crypto.getRandomValues(new Uint32Array(6))
-  const picks = Array.from(buf, (n) => words[n % words.length])
-  const num = crypto.getRandomValues(new Uint32Array(1))[0] % 10000
+  const picks = Array.from({ length: 6 }, () => words[unbiasedRandomInt(words.length)])
+  const num = unbiasedRandomInt(10_000)
   return `${picks.join('-')}-${num.toString().padStart(4, '0')}`
+}
+
+/**
+ * Generate an unbiased integer in `[0, max)` from a CSPRNG.
+ *
+ * Naively doing `crypto.getRandomValues(...) % max` is biased whenever
+ * `2^32 % max !== 0` — the lower buckets get slightly more probability
+ * than the higher ones. Rejection sampling fixes this: discard any
+ * draw that falls in the "unfair" top slice, so the remaining range
+ * is an exact multiple of `max` and the modulo is uniform.
+ *
+ * For the values we use (120-word list, 10_000) the rejection rate is
+ * effectively zero (< 1 in ~36M), so this loop is virtually always
+ * one iteration.
+ */
+function unbiasedRandomInt(max: number): number {
+  if (max <= 0 || !Number.isInteger(max)) {
+    throw new Error('unbiasedRandomInt: max must be a positive integer')
+  }
+  const range = 0x1_0000_0000 // 2^32
+  const limit = Math.floor(range / max) * max
+  const buf = new Uint32Array(1)
+  // Loop terminates: P(reject) = (range - limit) / range < max / range,
+  // which is microscopic for our inputs.
+  for (;;) {
+    crypto.getRandomValues(buf)
+    if (buf[0] < limit) return buf[0] % max
+  }
 }

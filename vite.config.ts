@@ -160,6 +160,13 @@ export default defineConfig(({ mode }) => {
           'src/shared/stores/**', // Zustand stores - tested via integration
           'src/shared/a11y/**', // Accessibility hooks - tested via E2E
           'src/devtools/**', // DevTools scenarios - tested manually
+          // Background SW glue — these were extracted from src/background/index.ts
+          // (which is excluded as an entry point) and are exercised end-to-end
+          // via the suspension/sessions/recovery suites that cover the underlying
+          // domain modules they delegate to.
+          'src/background/listeners.ts',
+          'src/background/lifecycle/**',
+          'src/background/messages/**',
         ],
         thresholds: {
           statements: 70,

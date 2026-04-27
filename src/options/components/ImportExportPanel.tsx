@@ -419,39 +419,24 @@ export function ImportExportPanel({
                 and we'll prioritize a fix.
               </p>
 
-              <label class="inline-block">
-                <span class="sr-only">Choose file to import</span>
-                <input
-                  ref={fileInputRef}
-                  type="file"
-                  accept=".json,.txt,.raftbundle,text/plain,application/json"
-                  onChange={handleFileSelect}
-                  class="sr-only"
-                  aria-describedby="import-formats"
-                />
-                <span
-                  role="button"
-                  tabIndex={importState.status === 'loading' ? -1 : 0}
-                  onClick={(e) => {
-                    // The wrapping <label> also forwards clicks to the file
-                    // input, so without stopPropagation the picker opens
-                    // twice.
-                    e.stopPropagation()
-                    fileInputRef.current?.click()
-                  }}
-                  onKeyDown={(e) => {
-                    if (e.key === 'Enter' || e.key === ' ') {
-                      e.preventDefault()
-                      fileInputRef.current?.click()
-                    }
-                  }}
-                  class={`inline-block px-4 py-2 text-sm bg-raft-100 text-raft-700 rounded-lg hover:bg-raft-200 transition-colors cursor-pointer ${
-                    importState.status === 'loading' ? 'opacity-50 cursor-not-allowed' : ''
-                  }`}
-                >
-                  {importState.status === 'loading' ? 'Importing...' : 'Choose File...'}
-                </span>
-              </label>
+              <input
+                ref={fileInputRef}
+                type="file"
+                accept=".json,.txt,.raftbundle,text/plain,application/json"
+                onChange={handleFileSelect}
+                class="sr-only"
+                aria-hidden="true"
+                tabIndex={-1}
+              />
+              <button
+                type="button"
+                onClick={() => fileInputRef.current?.click()}
+                disabled={importState.status === 'loading'}
+                aria-describedby="import-formats"
+                class="inline-block px-4 py-2 text-sm bg-raft-100 text-raft-700 rounded-lg hover:bg-raft-200 transition-colors cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                {importState.status === 'loading' ? 'Importing...' : 'Choose File...'}
+              </button>
               <span id="import-formats" class="sr-only">
                 Accepts JSON and text files from OneTab, Session Buddy, Tab Session Manager, Toby,
                 and Raft

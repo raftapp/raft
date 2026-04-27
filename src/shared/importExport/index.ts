@@ -26,9 +26,25 @@ export { parseSessionBuddy } from './parsers/sessionBuddy'
 export { parseTabSessionManager } from './parsers/tabSessionManager'
 export { parseToby } from './parsers/toby'
 export { parseRaft } from './parsers/raft'
+export { parseRaftbundle } from './parsers/raftbundle'
 
 // Re-export exporters
 export { exportAsJson, exportAsText, exportSessions, downloadExport } from './exporters'
+
+// Re-export encrypted bundle export/import
+export {
+  exportBundle,
+  importBundle,
+  bundleFilename,
+  generateBundlePassphrase,
+  parseEnvelope as parseBundleEnvelope,
+  readEnvelope as readBundleEnvelope,
+  isRaftBundleEnvelope,
+  BUNDLE_VERSION,
+  BUNDLE_EXTENSION,
+  BUNDLE_MIME_TYPE,
+} from './bundle'
+export type { RaftBundleEnvelope } from './bundle'
 
 // Main import function
 import type { ImportResult, ImportFormat } from './types'
@@ -78,6 +94,28 @@ export function importSessions(content: string): ImportResult {
       return parseToby(content)
     case 'raft':
       return parseRaft(content)
+    case 'raftbundle':
+      // Encrypted bundles need a passphrase, which auto-import can't supply.
+      // Surface a useful message; the panel handles bundles via parseRaftbundle directly.
+      return {
+        success: false,
+        sessions: [],
+        errors: [
+          {
+            message:
+              'Encrypted Raft bundle detected — use the encrypted bundle import to enter the passphrase.',
+          },
+        ],
+        warnings: [],
+        stats: {
+          totalEntries: 0,
+          validUrls: 0,
+          skippedUrls: 0,
+          sessionsCreated: 0,
+          tabsImported: 0,
+        },
+        format: 'raftbundle',
+      }
     default:
       return {
         success: false,
@@ -110,6 +148,8 @@ export function getFormatDisplayName(format: ImportFormat): string {
       return 'Toby'
     case 'raft':
       return 'Raft'
+    case 'raftbundle':
+      return 'Raft (encrypted bundle)'
     default:
       return format
   }

@@ -1,7 +1,7 @@
 /**
  * Persistent sync queue with exponential backoff
  *
- * The queue persists to chrome.storage to survive service worker termination.
+ * The queue persists to browser.storage to survive service worker termination.
  * Failed operations are retried with exponential backoff.
  */
 

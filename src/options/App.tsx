@@ -27,6 +27,7 @@ import {
 } from '@/shared/utils'
 import { SkipLink, LiveRegion } from '@/shared/a11y'
 import { useAnnounce, useFocusTrap, useFocusRestore } from '@/shared/a11y'
+import { browser } from '@/shared/browser'
 
 type TabType = 'general' | 'sessions' | 'browser-sync' | 'cloud' | 'about' | 'dev'
 
@@ -117,13 +118,13 @@ export function App() {
   const debouncedSaveSettings = useRef(
     debounce(async (updated: Settings) => {
       await settingsStorage.save(updated)
-      await chrome.runtime.sendMessage({ type: 'UPDATE_SETTINGS', settings: updated })
+      await browser.runtime.sendMessage({ type: 'UPDATE_SETTINGS', settings: updated })
       success('Settings saved')
     }, 500)
   ).current
 
   const loadSyncStatus = useCallback(() => {
-    chrome.runtime
+    browser.runtime
       .sendMessage({ type: 'GET_SYNC_STATUS' })
       .then((response) => {
         if (response.success) {
@@ -138,8 +139,8 @@ export function App() {
 
   const loadCloudSyncedIds = useCallback(() => {
     Promise.all([
-      chrome.runtime.sendMessage({ type: 'CLOUD_GET_SYNCED_IDS' }),
-      chrome.runtime.sendMessage({ type: 'CLOUD_GET_STATUS' }),
+      browser.runtime.sendMessage({ type: 'CLOUD_GET_SYNCED_IDS' }),
+      browser.runtime.sendMessage({ type: 'CLOUD_GET_STATUS' }),
     ])
       .then(([idsResponse, statusResponse]) => {
         if (idsResponse.success) {
@@ -155,7 +156,7 @@ export function App() {
   }, [])
 
   const loadRecoverySnapshots = useCallback(() => {
-    chrome.runtime
+    browser.runtime
       .sendMessage({ type: 'GET_RECOVERY_SNAPSHOTS' })
       .then((response) => {
         if (response.success) {
@@ -168,7 +169,7 @@ export function App() {
   }, [])
 
   const loadExportReminderState = useCallback(() => {
-    chrome.runtime
+    browser.runtime
       .sendMessage({ type: 'GET_EXPORT_REMINDER_STATE' })
       .then((response) => {
         if (response.success) {
@@ -181,7 +182,7 @@ export function App() {
   }, [])
 
   const dismissExportReminder = useCallback(() => {
-    chrome.runtime
+    browser.runtime
       .sendMessage({ type: 'DISMISS_EXPORT_REMINDER' })
       .then(() => {
         setExportReminderState(null)
@@ -193,7 +194,7 @@ export function App() {
   }, [success, showError])
 
   const markExportComplete = useCallback(() => {
-    chrome.runtime
+    browser.runtime
       .sendMessage({ type: 'MARK_EXPORT_COMPLETE' })
       .then(() => {
         setExportReminderState(null)
@@ -220,7 +221,9 @@ export function App() {
     checkProStatus()
 
     // Listen for storage changes to refresh data in real-time
-    const handleLocalStorageChange = (changes: { [key: string]: chrome.storage.StorageChange }) => {
+    const handleLocalStorageChange = (changes: {
+      [key: string]: browser.storage.StorageChange
+    }) => {
       if (changes[STORAGE_KEYS.SESSIONS]) {
         loadSessions()
       }
@@ -243,11 +246,11 @@ export function App() {
       loadSyncStatus()
     }
 
-    chrome.storage.local.onChanged.addListener(handleLocalStorageChange)
-    chrome.storage.sync.onChanged.addListener(handleSyncStorageChange)
+    browser.storage.local.onChanged.addListener(handleLocalStorageChange)
+    browser.storage.sync.onChanged.addListener(handleSyncStorageChange)
     return () => {
-      chrome.storage.local.onChanged.removeListener(handleLocalStorageChange)
-      chrome.storage.sync.onChanged.removeListener(handleSyncStorageChange)
+      browser.storage.local.onChanged.removeListener(handleLocalStorageChange)
+      browser.storage.sync.onChanged.removeListener(handleSyncStorageChange)
     }
   }, [
     loadSessions,
@@ -258,7 +261,7 @@ export function App() {
   ])
 
   const checkProStatus = () => {
-    chrome.runtime
+    browser.runtime
       .sendMessage({ type: 'PRO_CHECK_STATUS' })
       .then((response) => {
         if (response.success) {
@@ -390,7 +393,7 @@ export function App() {
   const handleRestoreRecoverySnapshot = async (snapshotId: string) => {
     setRecoveryLoading(true)
     try {
-      const response = await chrome.runtime.sendMessage({
+      const response = await browser.runtime.sendMessage({
         type: 'RESTORE_RECOVERY_SNAPSHOT',
         snapshotId,
       })
@@ -410,7 +413,7 @@ export function App() {
 
   const handleDeleteRecoverySnapshot = async (snapshotId: string) => {
     try {
-      const response = await chrome.runtime.sendMessage({
+      const response = await browser.runtime.sendMessage({
         type: 'DELETE_RECOVERY_SNAPSHOT',
         snapshotId,
       })
@@ -1227,7 +1230,7 @@ export function App() {
                         <button
                           onClick={() => {
                             setRestoringSync(true)
-                            chrome.runtime
+                            browser.runtime
                               .sendMessage({ type: 'RESTORE_FROM_SYNC' })
                               .then((response) => {
                                 if (response.success) {
@@ -1259,7 +1262,7 @@ export function App() {
                               return
                             }
                             setClearingSync(true)
-                            chrome.runtime
+                            browser.runtime
                               .sendMessage({ type: 'CLEAR_SYNC_DATA' })
                               .then((response) => {
                                 if (response.success) {

@@ -29,6 +29,7 @@ import {
 import type { RecoverySnapshot, Window, Tab, TabGroup } from '@/shared/types'
 import { nanoid } from 'nanoid'
 import { compressToUTF16, decompressFromUTF16 } from 'lz-string'
+import { browser } from '@/shared/browser'
 
 /**
  * Check if a URL is protected (should not be included in snapshots)
@@ -259,7 +260,7 @@ export const recoverySnapshotSync = {
         tabCount: snapshot.stats.tabCount,
       }
 
-      await chrome.storage.sync.set(updates)
+      await browser.storage.sync.set(updates)
       return true
     } catch (error) {
       console.error('[Raft] Failed to sync recovery snapshot:', error)
@@ -273,7 +274,7 @@ export const recoverySnapshotSync = {
   async get(): Promise<RecoverySnapshot | null> {
     try {
       // First check for chunked format
-      const metaResult = await chrome.storage.sync.get(SYNC_CHUNK_CONFIG.CHUNK_COUNT_KEY)
+      const metaResult = await browser.storage.sync.get(SYNC_CHUNK_CONFIG.CHUNK_COUNT_KEY)
       const meta = metaResult[SYNC_CHUNK_CONFIG.CHUNK_COUNT_KEY] as
         | { chunkCount: number }
         | undefined
@@ -284,7 +285,7 @@ export const recoverySnapshotSync = {
           { length: meta.chunkCount },
           (_, i) => `${SYNC_CHUNK_CONFIG.CHUNK_PREFIX}${i}`
         )
-        const chunksResult = await chrome.storage.sync.get(chunkKeys)
+        const chunksResult = await browser.storage.sync.get(chunkKeys)
 
         // Reassemble the compressed string
         let lzCompressed = ''
@@ -309,7 +310,7 @@ export const recoverySnapshotSync = {
       }
 
       // Fall back to legacy single-item format for backwards compatibility
-      const result = await chrome.storage.sync.get(SYNC_STORAGE_KEYS.RECOVERY_SNAPSHOT)
+      const result = await browser.storage.sync.get(SYNC_STORAGE_KEYS.RECOVERY_SNAPSHOT)
       const stored = result[SYNC_STORAGE_KEYS.RECOVERY_SNAPSHOT]
 
       if (!stored) {
@@ -346,7 +347,7 @@ export const recoverySnapshotSync = {
   async getSize(): Promise<number> {
     try {
       // Check for chunked format first
-      const metaResult = await chrome.storage.sync.get(SYNC_CHUNK_CONFIG.CHUNK_COUNT_KEY)
+      const metaResult = await browser.storage.sync.get(SYNC_CHUNK_CONFIG.CHUNK_COUNT_KEY)
       const meta = metaResult[SYNC_CHUNK_CONFIG.CHUNK_COUNT_KEY] as
         | { chunkCount: number }
         | undefined
@@ -356,7 +357,7 @@ export const recoverySnapshotSync = {
           { length: meta.chunkCount },
           (_, i) => `${SYNC_CHUNK_CONFIG.CHUNK_PREFIX}${i}`
         )
-        const chunksResult = await chrome.storage.sync.get(chunkKeys)
+        const chunksResult = await browser.storage.sync.get(chunkKeys)
 
         const encoder = new TextEncoder()
         let totalSize = 0
@@ -372,7 +373,7 @@ export const recoverySnapshotSync = {
       }
 
       // Fall back to legacy single-item format
-      const result = await chrome.storage.sync.get(SYNC_STORAGE_KEYS.RECOVERY_SNAPSHOT)
+      const result = await browser.storage.sync.get(SYNC_STORAGE_KEYS.RECOVERY_SNAPSHOT)
       const stored = result[SYNC_STORAGE_KEYS.RECOVERY_SNAPSHOT]
       if (!stored) return 0
       if (typeof stored === 'string') {
@@ -389,7 +390,7 @@ export const recoverySnapshotSync = {
    */
   async getMetadata(): Promise<{ timestamp: number; tabCount: number; chunkCount: number } | null> {
     try {
-      const metaResult = await chrome.storage.sync.get(SYNC_CHUNK_CONFIG.CHUNK_COUNT_KEY)
+      const metaResult = await browser.storage.sync.get(SYNC_CHUNK_CONFIG.CHUNK_COUNT_KEY)
       const meta = metaResult[SYNC_CHUNK_CONFIG.CHUNK_COUNT_KEY] as
         | { chunkCount: number; timestamp: number; tabCount: number }
         | undefined
@@ -399,7 +400,7 @@ export const recoverySnapshotSync = {
       }
 
       // Fall back to legacy format - need to load and parse
-      const result = await chrome.storage.sync.get(SYNC_STORAGE_KEYS.RECOVERY_SNAPSHOT)
+      const result = await browser.storage.sync.get(SYNC_STORAGE_KEYS.RECOVERY_SNAPSHOT)
       const stored = result[SYNC_STORAGE_KEYS.RECOVERY_SNAPSHOT]
 
       if (!stored) return null
@@ -444,7 +445,7 @@ export const recoverySnapshotSync = {
         keysToRemove.push(`${SYNC_CHUNK_CONFIG.CHUNK_PREFIX}${i}`)
       }
 
-      await chrome.storage.sync.remove(keysToRemove)
+      await browser.storage.sync.remove(keysToRemove)
     } catch (error) {
       console.error('[Raft] Failed to clear recovery snapshot from sync:', error)
     }
@@ -457,7 +458,7 @@ export const recoverySnapshotSync = {
  */
 export async function captureRecoverySnapshot(): Promise<RecoverySnapshot | null> {
   try {
-    const chromeWindows = await chrome.windows.getAll({ populate: true })
+    const chromeWindows = await browser.windows.getAll({ populate: true })
     const now = Date.now()
 
     const windows: Window[] = []
@@ -468,7 +469,7 @@ export async function captureRecoverySnapshot(): Promise<RecoverySnapshot | null
       if (!win.id || win.type !== 'normal') continue
 
       // Get tab groups for this window
-      const chromeGroups = await chrome.tabGroups.query({ windowId: win.id })
+      const chromeGroups = await browser.tabGroups.query({ windowId: win.id })
       const groupIdMap = new Map<number, string>()
 
       const tabGroups: TabGroup[] = chromeGroups.map((group) => {
@@ -477,7 +478,7 @@ export async function captureRecoverySnapshot(): Promise<RecoverySnapshot | null
         return {
           id,
           title: group.title || '',
-          color: group.color as chrome.tabGroups.Color,
+          color: group.color as browser.tabGroups.Color,
           collapsed: group.collapsed,
         }
       })
@@ -515,7 +516,7 @@ export async function captureRecoverySnapshot(): Promise<RecoverySnapshot | null
         tabs,
         tabGroups,
         focused: win.focused,
-        state: win.state as chrome.windows.WindowState,
+        state: win.state as browser.windows.WindowState,
       })
     }
 
@@ -617,7 +618,7 @@ export async function restoreFromSnapshot(
       if (urls.length === 0) continue
 
       // Create window with all tabs
-      const createdWindow = await chrome.windows.create({
+      const createdWindow = await browser.windows.create({
         url: urls,
         focused: window.focused,
         state: window.state,
@@ -627,7 +628,7 @@ export async function restoreFromSnapshot(
       windowsCreated++
 
       // Get the created tabs to set up groups and pinned state
-      const createdTabs = await chrome.tabs.query({ windowId: createdWindow.id })
+      const createdTabs = await browser.tabs.query({ windowId: createdWindow.id })
       tabsCreated += createdTabs.length
 
       // Map our group IDs to Chrome group IDs
@@ -650,14 +651,14 @@ export async function restoreFromSnapshot(
 
         if (groupTabIds.length > 0) {
           try {
-            const chromeGroupId = await chrome.tabs.group({
+            const chromeGroupId = await browser.tabs.group({
               tabIds: groupTabIds as [number, ...number[]],
               createProperties: { windowId: createdWindow.id },
             })
             groupIdMap.set(group.id, chromeGroupId)
 
             // Update group properties
-            await chrome.tabGroups.update(chromeGroupId, {
+            await browser.tabGroups.update(chromeGroupId, {
               title: group.title,
               color: group.color,
               collapsed: group.collapsed,
@@ -674,7 +675,7 @@ export async function restoreFromSnapshot(
           const createdTab = createdTabs.find((ct) => ct.index === tab.index)
           if (createdTab?.id) {
             try {
-              await chrome.tabs.update(createdTab.id, { pinned: true })
+              await browser.tabs.update(createdTab.id, { pinned: true })
             } catch (err) {
               console.warn('[Raft] Failed to pin tab:', err)
             }

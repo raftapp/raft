@@ -6,6 +6,7 @@
 
 import { useState, useEffect } from 'preact/hooks'
 import { formatRelativeTime } from '../utils'
+import { browser } from '../browser'
 
 interface SyncStatusData {
   configured: boolean
@@ -29,7 +30,7 @@ export function SyncStatus({ onUnlockClick, onConnectClick }: SyncStatusProps) {
   useEffect(() => {
     const loadStatus = async () => {
       try {
-        const response = await chrome.runtime.sendMessage({ type: 'CLOUD_GET_STATUS' })
+        const response = await browser.runtime.sendMessage({ type: 'CLOUD_GET_STATUS' })
         if (response.success) {
           setStatus(response.data)
         }

@@ -10,6 +10,7 @@
 import { settingsStorage } from '@/shared/storage'
 import { PROTECTED_URL_PATTERNS } from '@/shared/constants'
 import { normalizeUrlForDedup } from '@/shared/utils'
+import { browser } from '@/shared/browser'
 
 export interface DuplicateResult {
   /** Total duplicate tabs found (including the one kept) */
@@ -23,7 +24,7 @@ export interface DuplicateResult {
 /**
  * Check if a tab is protected from closure during dedup.
  */
-async function isProtected(tab: chrome.tabs.Tab): Promise<boolean> {
+async function isProtected(tab: browser.tabs.Tab): Promise<boolean> {
   // Protected URL patterns (chrome://, etc.)
   if (tab.url && PROTECTED_URL_PATTERNS.some((pattern) => tab.url!.startsWith(pattern))) {
     return true
@@ -47,7 +48,7 @@ async function isProtected(tab: chrome.tabs.Tab): Promise<boolean> {
 /**
  * Score a tab for keep priority (higher = more likely to keep).
  */
-function tabKeepScore(tab: chrome.tabs.Tab): number {
+function tabKeepScore(tab: browser.tabs.Tab): number {
   let score = 0
   if (tab.active) score += 1000
   if (!tab.discarded) score += 100
@@ -60,9 +61,9 @@ function tabKeepScore(tab: chrome.tabs.Tab): number {
  * Returns a map of normalized URL → array of tabs with that URL.
  * Only includes groups with 2+ tabs.
  */
-async function findDuplicateGroups(): Promise<Map<string, chrome.tabs.Tab[]>> {
-  const allTabs = await chrome.tabs.query({})
-  const groups = new Map<string, chrome.tabs.Tab[]>()
+async function findDuplicateGroups(): Promise<Map<string, browser.tabs.Tab[]>> {
+  const allTabs = await browser.tabs.query({})
+  const groups = new Map<string, browser.tabs.Tab[]>()
 
   for (const tab of allTabs) {
     if (!tab.url || !tab.id) continue
@@ -82,7 +83,7 @@ async function findDuplicateGroups(): Promise<Map<string, chrome.tabs.Tab[]>> {
   }
 
   // Filter to only groups with duplicates
-  const duplicates = new Map<string, chrome.tabs.Tab[]>()
+  const duplicates = new Map<string, browser.tabs.Tab[]>()
   for (const [url, tabs] of groups) {
     if (tabs.length >= 2) {
       duplicates.set(url, tabs)
@@ -143,13 +144,13 @@ export async function closeDuplicates(): Promise<DuplicateResult> {
   // Close tabs in batch, falling back to individual on error
   if (tabIdsToClose.length > 0) {
     try {
-      await chrome.tabs.remove(tabIdsToClose)
+      await browser.tabs.remove(tabIdsToClose)
       tabsClosed = tabIdsToClose.length
     } catch {
       // Batch failed, try individually
       for (const tabId of tabIdsToClose) {
         try {
-          await chrome.tabs.remove(tabId)
+          await browser.tabs.remove(tabId)
           tabsClosed++
         } catch {
           // Tab may have already been closed

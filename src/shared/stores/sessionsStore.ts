@@ -7,11 +7,12 @@
 
 import { create } from 'zustand'
 import type { Session, PartialRestoreSelection } from '@/shared/types'
+import { browser } from '../browser'
 
 type MessageResponse = { success: true; data?: unknown } | { success: false; error: string }
 
 async function sendMessage<T>(message: unknown): Promise<T | null> {
-  const response = (await chrome.runtime.sendMessage(message)) as MessageResponse
+  const response = (await browser.runtime.sendMessage(message)) as MessageResponse
   if (response.success) {
     return response.data as T
   }
@@ -95,7 +96,7 @@ export const useSessionsStore = create<SessionsState & SessionsActions>((set, ge
   saveCurrentWindow: async (name?: string) => {
     set({ loading: true, error: null })
     try {
-      const currentWindow = await chrome.windows.getCurrent()
+      const currentWindow = await browser.windows.getCurrent()
       const result = await sendMessage<{ session: SessionWithStats }>({
         type: 'SAVE_WINDOW',
         windowId: currentWindow.id,

@@ -7,6 +7,7 @@
 import { useState, useEffect } from 'preact/hooks'
 import { PRO_PRICING } from '@/shared/constants'
 import type { LicenseData } from '@/shared/licensing'
+import { browser } from '@/shared/browser'
 
 interface ProUpgradeProps {
   compact?: boolean
@@ -21,7 +22,7 @@ export function ProUpgrade({ compact = false, onLicenseActivated }: ProUpgradePr
 
   useEffect(() => {
     // Load existing license
-    chrome.runtime.sendMessage({ type: 'PRO_GET_LICENSE' }).then((response) => {
+    browser.runtime.sendMessage({ type: 'PRO_GET_LICENSE' }).then((response) => {
       if (response.success && response.data.license) {
         setLicense(response.data.license)
       }
@@ -29,7 +30,7 @@ export function ProUpgrade({ compact = false, onLicenseActivated }: ProUpgradePr
   }, [])
 
   const handleCheckout = () => {
-    chrome.runtime.sendMessage({ type: 'PRO_OPEN_CHECKOUT' })
+    browser.runtime.sendMessage({ type: 'PRO_OPEN_CHECKOUT' })
   }
 
   const handleActivate = async () => {
@@ -39,7 +40,7 @@ export function ProUpgrade({ compact = false, onLicenseActivated }: ProUpgradePr
     setError('')
 
     try {
-      const response = await chrome.runtime.sendMessage({
+      const response = await browser.runtime.sendMessage({
         type: 'PRO_ACTIVATE_LICENSE',
         licenseKey: licenseKey.trim(),
       })
@@ -63,7 +64,7 @@ export function ProUpgrade({ compact = false, onLicenseActivated }: ProUpgradePr
       return
     }
 
-    await chrome.runtime.sendMessage({ type: 'PRO_CLEAR_LICENSE' })
+    await browser.runtime.sendMessage({ type: 'PRO_CLEAR_LICENSE' })
     setLicense(null)
   }
 

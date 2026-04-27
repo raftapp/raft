@@ -3,13 +3,15 @@
  *
  * These interfaces are the foundation of the extension.
  * Session and Tab structures are designed to be:
- * - Serializable to chrome.storage
+ * - Serializable to browser.storage
  * - Compatible with import/export formats
  * - Extensible for future features
  */
 
-// Re-export chrome.tabGroups.Color for convenience
-export type TabGroupColor = chrome.tabGroups.Color
+import { browser } from './browser'
+
+// Re-export browser.tabGroups.Color for convenience
+export type TabGroupColor = browser.tabGroups.Color
 
 /**
  * Represents a single browser tab
@@ -62,7 +64,7 @@ export interface Window {
   /** Whether this was the focused window */
   focused?: boolean
   /** Window state (normal, minimized, maximized, fullscreen) */
-  state?: chrome.windows.WindowState
+  state?: browser.windows.WindowState
 }
 
 /**

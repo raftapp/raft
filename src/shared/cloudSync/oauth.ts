@@ -1,12 +1,13 @@
 /**
  * Google OAuth flow for Chrome extensions (MV3)
  *
- * Uses chrome.identity.launchWebAuthFlow() for the OAuth flow.
+ * Uses browser.identity.launchWebAuthFlow() for the OAuth flow.
  * This is the recommended approach for MV3 extensions.
  */
 
 import type { CloudTokens } from './types'
 import { GOOGLE_OAUTH } from '../constants'
+import { browser } from '../browser'
 
 /**
  * OAuth error with machine-readable error code (e.g., "invalid_grant")
@@ -60,7 +61,7 @@ function base64UrlEncode(buffer: Uint8Array): string {
 }
 
 /**
- * Launch Google OAuth flow using chrome.identity
+ * Launch Google OAuth flow using browser.identity
  *
  * This opens Google's consent screen and returns an authorization code.
  * We then exchange the code for tokens.
@@ -69,7 +70,7 @@ export async function launchGoogleOAuth(): Promise<OAuthResult> {
   // Clear any cached auth tokens from a previous install so Google doesn't
   // silently reuse a stale authorization that may be missing required scopes
   try {
-    await chrome.identity.clearAllCachedAuthTokens()
+    await browser.identity.clearAllCachedAuthTokens()
   } catch {
     // Best-effort — not all browsers support this
   }
@@ -79,7 +80,7 @@ export async function launchGoogleOAuth(): Promise<OAuthResult> {
   const codeChallenge = await generateCodeChallenge(codeVerifier)
 
   // Get the redirect URL for this extension
-  const redirectUrl = chrome.identity.getRedirectURL()
+  const redirectUrl = browser.identity.getRedirectURL()
 
   // Build the authorization URL
   const authUrl = new URL(GOOGLE_OAUTH.AUTH_URL)
@@ -93,7 +94,7 @@ export async function launchGoogleOAuth(): Promise<OAuthResult> {
   authUrl.searchParams.set('prompt', 'consent') // Always show consent to get refresh token
 
   // Launch the OAuth flow
-  const responseUrl = await chrome.identity.launchWebAuthFlow({
+  const responseUrl = await browser.identity.launchWebAuthFlow({
     url: authUrl.toString(),
     interactive: true,
   })
@@ -233,10 +234,10 @@ export async function revokeAccess(accessToken: string): Promise<void> {
     method: 'POST',
   })
 
-  // Also clear any cached tokens in chrome.identity
+  // Also clear any cached tokens in browser.identity
   // This is a best-effort cleanup
   try {
-    await chrome.identity.clearAllCachedAuthTokens()
+    await browser.identity.clearAllCachedAuthTokens()
   } catch {
     // Ignore errors here
   }

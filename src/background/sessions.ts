@@ -21,6 +21,7 @@ import type {
 } from '@/shared/types'
 import { backupSession, removeSessionFromSync } from '@/shared/syncBackup'
 import { syncEngine, cloudSyncSettingsStorage } from '@/shared/cloudSync'
+import { browser } from '@/shared/browser'
 
 /** Cached search index: session ID → pre-lowercased searchable string */
 let searchIndex: Map<string, string> | null = null
@@ -64,7 +65,7 @@ export async function captureCurrentSession(
   name?: string,
   source: SessionSource = 'manual'
 ): Promise<Session> {
-  const windows = await chrome.windows.getAll({ populate: true })
+  const windows = await browser.windows.getAll({ populate: true })
   const now = Date.now()
 
   const sessionWindows: Window[] = []
@@ -73,7 +74,7 @@ export async function captureCurrentSession(
     if (!win.id || win.type !== 'normal') continue
 
     // Get tab groups for this window
-    const chromeGroups = await chrome.tabGroups.query({ windowId: win.id })
+    const chromeGroups = await browser.tabGroups.query({ windowId: win.id })
     const groupIdMap = new Map<number, string>()
 
     const tabGroups: TabGroup[] = chromeGroups.map((group) => {
@@ -115,7 +116,7 @@ export async function captureCurrentSession(
       tabs,
       tabGroups,
       focused: win.focused,
-      state: win.state as chrome.windows.WindowState,
+      state: win.state as browser.windows.WindowState,
     })
   }
 
@@ -135,11 +136,11 @@ export async function captureCurrentSession(
  * Capture a single window
  */
 export async function captureWindow(windowId: number, name?: string): Promise<Session> {
-  const win = await chrome.windows.get(windowId, { populate: true })
+  const win = await browser.windows.get(windowId, { populate: true })
   const now = Date.now()
 
   // Get tab groups for this window
-  const chromeGroups = await chrome.tabGroups.query({ windowId })
+  const chromeGroups = await browser.tabGroups.query({ windowId })
   const groupIdMap = new Map<number, string>()
 
   const tabGroups: TabGroup[] = chromeGroups.map((group) => {
@@ -184,7 +185,7 @@ export async function captureWindow(windowId: number, name?: string): Promise<Se
         tabs,
         tabGroups,
         focused: win.focused,
-        state: win.state as chrome.windows.WindowState,
+        state: win.state as browser.windows.WindowState,
       },
     ],
     source: 'manual',
@@ -205,7 +206,7 @@ async function waitForTabNavigation(
   const deadline = Date.now() + timeoutMs
   while (Date.now() < deadline) {
     try {
-      const tab = await chrome.tabs.get(tabId)
+      const tab = await browser.tabs.get(tabId)
       if (tab.url && tab.url !== 'about:blank') return true
     } catch {
       return false // Tab closed
@@ -251,9 +252,9 @@ async function restoreWindows(
       const firstTab = sessionWindow.tabs[0]
       if (!firstTab) continue
 
-      let newWindow: chrome.windows.Window | undefined
+      let newWindow: browser.windows.Window | undefined
       try {
-        newWindow = await chrome.windows.create({
+        newWindow = await browser.windows.create({
           url: firstTab.url,
           focused: sessionWindow.focused,
           state: sessionWindow.state,
@@ -291,7 +292,7 @@ async function restoreWindows(
         const tab = sessionWindow.tabs[i]
 
         try {
-          const newTab = await chrome.tabs.create({
+          const newTab = await browser.tabs.create({
             windowId: newWindowId,
             url: tab.url,
             index: tab.index,
@@ -312,20 +313,20 @@ async function restoreWindows(
               try {
                 const existingGroupId = groupIdMap.get(tab.groupId)
                 if (existingGroupId !== undefined) {
-                  await chrome.tabs.group({
+                  await browser.tabs.group({
                     tabIds: newTab.id,
                     groupId: existingGroupId,
                   })
                 } else {
                   const sessionGroup = sessionWindow.tabGroups.find((g) => g.id === tab.groupId)
                   if (sessionGroup) {
-                    const newGroupId = await chrome.tabs.group({
+                    const newGroupId = await browser.tabs.group({
                       tabIds: newTab.id,
                       createProperties: { windowId: newWindowId },
                     })
                     groupIdMap.set(tab.groupId, newGroupId)
 
-                    await chrome.tabGroups.update(newGroupId, {
+                    await browser.tabGroups.update(newGroupId, {
                       title: sessionGroup.title,
                       color: sessionGroup.color,
                       collapsed: sessionGroup.collapsed,
@@ -347,20 +348,20 @@ async function restoreWindows(
         try {
           const existingGroupId = groupIdMap.get(firstTab.groupId)
           if (existingGroupId !== undefined) {
-            await chrome.tabs.group({
+            await browser.tabs.group({
               tabIds: firstTabId,
               groupId: existingGroupId,
             })
           } else {
             const sessionGroup = sessionWindow.tabGroups.find((g) => g.id === firstTab.groupId)
             if (sessionGroup) {
-              const newGroupId = await chrome.tabs.group({
+              const newGroupId = await browser.tabs.group({
                 tabIds: firstTabId,
                 createProperties: { windowId: newWindowId },
               })
               groupIdMap.set(firstTab.groupId, newGroupId)
 
-              await chrome.tabGroups.update(newGroupId, {
+              await browser.tabGroups.update(newGroupId, {
                 title: sessionGroup.title,
                 color: sessionGroup.color,
                 collapsed: sessionGroup.collapsed,
@@ -375,7 +376,7 @@ async function restoreWindows(
       // Pin the first tab if needed (must be done after grouping)
       if (firstTabId && firstTab.pinned) {
         try {
-          await chrome.tabs.update(firstTabId, { pinned: true })
+          await browser.tabs.update(firstTabId, { pinned: true })
         } catch (err) {
           console.warn(`[Raft] Failed to pin first tab "${firstTab.title}":`, err)
         }
@@ -398,7 +399,7 @@ async function restoreWindows(
           console.warn(`[Raft] Tab ${tabId} navigation did not commit, skipping discard`)
           return
         }
-        await chrome.tabs.discard(tabId)
+        await browser.tabs.discard(tabId)
       })
     )
     for (const r of results) {

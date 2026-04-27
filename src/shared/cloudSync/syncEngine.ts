@@ -37,6 +37,7 @@ import type { SyncProvider } from './providers/types'
 import * as syncQueue from './syncQueue'
 import { sessionsStorage } from '../storage'
 import { TOMBSTONE_RETENTION_MS, CLOUD_SYNC_KEYS } from '../constants'
+import { browser } from '../browser'
 
 /** Cached encryption key (in memory only, cleared on service worker termination) */
 let cachedEncryptionKey: CryptoKey | null = null
@@ -86,12 +87,12 @@ export function clearCachedTokens(): void {
 
 /** Save the set of cloud-synced session IDs to local storage */
 async function saveSyncedIds(ids: string[]): Promise<void> {
-  await chrome.storage.local.set({ [CLOUD_SYNC_KEYS.SYNCED_IDS]: ids })
+  await browser.storage.local.set({ [CLOUD_SYNC_KEYS.SYNCED_IDS]: ids })
 }
 
 /** Add a session ID to the cached cloud-synced set */
 async function addSyncedId(id: string): Promise<void> {
-  const result = await chrome.storage.local.get(CLOUD_SYNC_KEYS.SYNCED_IDS)
+  const result = await browser.storage.local.get(CLOUD_SYNC_KEYS.SYNCED_IDS)
   const ids = (result[CLOUD_SYNC_KEYS.SYNCED_IDS] as string[] | undefined) ?? []
   if (!ids.includes(id)) {
     ids.push(id)
@@ -101,7 +102,7 @@ async function addSyncedId(id: string): Promise<void> {
 
 /** Remove a session ID from the cached cloud-synced set */
 async function removeSyncedId(id: string): Promise<void> {
-  const result = await chrome.storage.local.get(CLOUD_SYNC_KEYS.SYNCED_IDS)
+  const result = await browser.storage.local.get(CLOUD_SYNC_KEYS.SYNCED_IDS)
   const ids = (result[CLOUD_SYNC_KEYS.SYNCED_IDS] as string[] | undefined) ?? []
   const filtered = ids.filter((i) => i !== id)
   await saveSyncedIds(filtered)
@@ -391,7 +392,7 @@ export async function performFullSync(): Promise<SyncResult> {
       }
 
       // 6. Handle local deletions (sessions previously synced to this device but no longer local)
-      const syncedIdsResult = await chrome.storage.local.get(CLOUD_SYNC_KEYS.SYNCED_IDS)
+      const syncedIdsResult = await browser.storage.local.get(CLOUD_SYNC_KEYS.SYNCED_IDS)
       const previouslySyncedIds = new Set(
         (syncedIdsResult[CLOUD_SYNC_KEYS.SYNCED_IDS] as string[] | undefined) ?? []
       )

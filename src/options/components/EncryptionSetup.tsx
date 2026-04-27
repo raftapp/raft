@@ -7,6 +7,7 @@
 
 import { useState, useRef } from 'preact/hooks'
 import { useFocusTrap, useFocusRestore } from '@/shared/a11y'
+import { browser } from '@/shared/browser'
 
 interface EncryptionSetupProps {
   email?: string
@@ -73,7 +74,7 @@ export function EncryptionSetup({
     setErrors([])
 
     try {
-      const response = await chrome.runtime.sendMessage({
+      const response = await browser.runtime.sendMessage({
         type: 'CLOUD_SETUP_ENCRYPTION',
         password,
         tokens: pendingTokens?.tokens,

@@ -3,7 +3,7 @@
  *
  * Key insight: MV3 service workers get terminated aggressively (after ~30s of inactivity).
  * We cannot rely on in-memory state. Everything must:
- * 1. Persist to chrome.storage immediately
+ * 1. Persist to browser.storage immediately
  * 2. Reload from storage on every wake
  *
  * This wrapper provides:
@@ -15,16 +15,17 @@
 import type { Session, Folder, Settings } from './types'
 import { STORAGE_KEYS } from './constants'
 import { DEFAULT_SETTINGS } from './types'
+import { browser } from './browser'
 
 /**
- * Type-safe wrapper around chrome.storage.local
+ * Type-safe wrapper around browser.storage.local
  */
 export const storage = {
   /**
    * Get a value from storage
    */
   async get<T>(key: string, defaultValue: T): Promise<T> {
-    const result = await chrome.storage.local.get(key)
+    const result = await browser.storage.local.get(key)
     return (result[key] as T) ?? defaultValue
   },
 
@@ -32,21 +33,21 @@ export const storage = {
    * Set a value in storage
    */
   async set<T>(key: string, value: T): Promise<void> {
-    await chrome.storage.local.set({ [key]: value })
+    await browser.storage.local.set({ [key]: value })
   },
 
   /**
    * Remove a value from storage
    */
   async remove(key: string): Promise<void> {
-    await chrome.storage.local.remove(key)
+    await browser.storage.local.remove(key)
   },
 
   /**
    * Get multiple values from storage
    */
   async getMany<T extends Record<string, unknown>>(keys: (keyof T)[]): Promise<Partial<T>> {
-    const result = await chrome.storage.local.get(keys as string[])
+    const result = await browser.storage.local.get(keys as string[])
     return result as Partial<T>
   },
 
@@ -54,7 +55,7 @@ export const storage = {
    * Set multiple values atomically
    */
   async setMany(items: Record<string, unknown>): Promise<void> {
-    await chrome.storage.local.set(items)
+    await browser.storage.local.set(items)
   },
 }
 

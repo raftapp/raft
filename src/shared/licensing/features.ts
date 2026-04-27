@@ -5,6 +5,7 @@
  */
 
 import { checkLicense } from './lemonsqueezy'
+import { browser } from '../browser'
 
 /**
  * Feature flags for different tiers
@@ -57,7 +58,7 @@ const PRO_FEATURES: FeatureFlags = {
  */
 export async function isProUser(): Promise<boolean> {
   if (import.meta.env.DEV) {
-    const result = await chrome.storage.local.get('raft:dev:proOverride')
+    const result = await browser.storage.local.get('raft:dev:proOverride')
     if (result['raft:dev:proOverride']) return true
   }
   const { isPro } = await checkLicense()

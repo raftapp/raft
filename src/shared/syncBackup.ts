@@ -1,7 +1,7 @@
 /**
  * Sync Backup Module
  *
- * Provides automatic backup of sessions to chrome.storage.sync.
+ * Provides automatic backup of sessions to browser.storage.sync.
  * This allows sessions to survive extension reinstalls and sync across devices.
  *
  * Strategy:
@@ -16,6 +16,7 @@
 import type { Session, TabGroup } from './types'
 import { SYNC_STORAGE_KEYS, SYNC_LIMITS, SYNC_CHUNK_CONFIG } from './constants'
 import { compressToUTF16, decompressFromUTF16 } from 'lz-string'
+import { browser } from './browser'
 
 /**
  * Compress an object to a UTF-16 string for storage
@@ -95,7 +96,7 @@ interface SyncedSessionMeta {
 }
 
 /**
- * Sync manifest stored in chrome.storage.sync
+ * Sync manifest stored in browser.storage.sync
  */
 interface SyncManifest {
   /** Version for future migrations */
@@ -211,7 +212,7 @@ function getSessionKey(sessionId: string): string {
  * Load the sync manifest
  */
 async function getManifest(): Promise<SyncManifest> {
-  const result = await chrome.storage.sync.get(SYNC_STORAGE_KEYS.MANIFEST)
+  const result = await browser.storage.sync.get(SYNC_STORAGE_KEYS.MANIFEST)
   const manifest = result[SYNC_STORAGE_KEYS.MANIFEST] as SyncManifest | undefined
   return (
     manifest ?? {
@@ -228,7 +229,7 @@ async function getManifest(): Promise<SyncManifest> {
  */
 async function saveManifest(manifest: SyncManifest): Promise<void> {
   manifest.updatedAt = Date.now()
-  await chrome.storage.sync.set({ [SYNC_STORAGE_KEYS.MANIFEST]: manifest })
+  await browser.storage.sync.set({ [SYNC_STORAGE_KEYS.MANIFEST]: manifest })
 }
 
 /**
@@ -302,7 +303,7 @@ export function backupSession(session: Session): Promise<boolean> {
 
         // Remove oldest session
         const removed = manifest.sessions.splice(oldestIndex, 1)[0]
-        await chrome.storage.sync.remove(getSessionKey(removed.id))
+        await browser.storage.sync.remove(getSessionKey(removed.id))
         manifest.totalBytes -= removed.size
         available += removed.size
       }
@@ -315,7 +316,7 @@ export function backupSession(session: Session): Promise<boolean> {
 
       // Save the compressed session
       const sessionKey = getSessionKey(session.id)
-      await chrome.storage.sync.set({ [sessionKey]: compressed })
+      await browser.storage.sync.set({ [sessionKey]: compressed })
 
       // Update manifest (tabCount already computed above for projectedMeta)
       const meta: SyncedSessionMeta = {
@@ -358,7 +359,7 @@ export async function removeSessionFromSync(sessionId: string): Promise<void> {
     if (index >= 0) {
       const removed = manifest.sessions.splice(index, 1)[0]
       manifest.totalBytes -= removed.size
-      await chrome.storage.sync.remove(getSessionKey(sessionId))
+      await browser.storage.sync.remove(getSessionKey(sessionId))
       await saveManifest(manifest)
     }
   } catch (error) {
@@ -382,7 +383,7 @@ export async function restoreFromSync(): Promise<Session[]> {
     const sessions: Session[] = []
     const sessionKeys = manifest.sessions.map((s) => getSessionKey(s.id))
 
-    const result = await chrome.storage.sync.get(sessionKeys)
+    const result = await browser.storage.sync.get(sessionKeys)
 
     for (const meta of manifest.sessions) {
       const key = getSessionKey(meta.id)
@@ -442,7 +443,7 @@ export async function getSyncStatus(): Promise<{
 
   try {
     // Check for new chunked format first
-    const metaResult = await chrome.storage.sync.get(SYNC_CHUNK_CONFIG.CHUNK_COUNT_KEY)
+    const metaResult = await browser.storage.sync.get(SYNC_CHUNK_CONFIG.CHUNK_COUNT_KEY)
     const meta = metaResult[SYNC_CHUNK_CONFIG.CHUNK_COUNT_KEY] as
       | { chunkCount: number; timestamp: number; tabCount: number }
       | undefined
@@ -453,7 +454,7 @@ export async function getSyncStatus(): Promise<{
         { length: meta.chunkCount },
         (_, i) => `${SYNC_CHUNK_CONFIG.CHUNK_PREFIX}${i}`
       )
-      const chunksResult = await chrome.storage.sync.get(chunkKeys)
+      const chunksResult = await browser.storage.sync.get(chunkKeys)
 
       const encoder = new globalThis.TextEncoder()
       for (let i = 0; i < meta.chunkCount; i++) {
@@ -467,7 +468,7 @@ export async function getSyncStatus(): Promise<{
       recoveryTabCount = meta.tabCount
     } else {
       // Fall back to legacy single-item format
-      const result = await chrome.storage.sync.get(SYNC_STORAGE_KEYS.RECOVERY_SNAPSHOT)
+      const result = await browser.storage.sync.get(SYNC_STORAGE_KEYS.RECOVERY_SNAPSHOT)
       const stored = result[SYNC_STORAGE_KEYS.RECOVERY_SNAPSHOT]
       if (stored) {
         if (typeof stored === 'string') {
@@ -534,5 +535,5 @@ export async function shouldRestoreFromSync(localSessionCount: number): Promise<
 export async function clearSyncData(): Promise<void> {
   const manifest = await getManifest()
   const keys = [SYNC_STORAGE_KEYS.MANIFEST, ...manifest.sessions.map((s) => getSessionKey(s.id))]
-  await chrome.storage.sync.remove(keys)
+  await browser.storage.sync.remove(keys)
 }

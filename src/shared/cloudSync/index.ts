@@ -61,8 +61,12 @@ export {
 } from './oauth'
 export type { OAuthResult } from './oauth'
 
+// Sync provider interface (backend-agnostic)
+export type { SyncProvider, SyncObjectInfo, ProviderKeyData } from './providers/types'
+
 // Google Drive provider
 export * as gdrive from './providers/gdrive'
+export { createGoogleDriveProvider } from './providers/gdriveProvider'
 
 // Sync queue
 export * as syncQueue from './syncQueue'

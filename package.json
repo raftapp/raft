@@ -44,8 +44,10 @@
   ],
   "author": "Kevin Raymond",
   "license": "MIT",
+  "packageManager": "pnpm@10.33.0",
   "devDependencies": {
     "@crxjs/vite-plugin": "2.4.0",
+    "@eslint/js": "^9.39.2",
     "@preact/preset-vite": "^2.10.2",
     "@tailwindcss/postcss": "^4.1.18",
     "@types/chrome": "^0.1.34",

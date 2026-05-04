@@ -28,6 +28,8 @@ const SECTION_DESCRIPTIONS = {
     "Raft's save, restore, capture, import, and export code paths are verified to never call fetch() or XMLHttpRequest. Your session data never leaves your browser unless you explicitly enable Cloud Sync.",
   'Raft handles your biggest sessions':
     'Scale tests verify correct behavior with 100+ tabs, 200+ tabs with 20 tab groups, 1000 stored sessions, chunked sync storage for 500+ tabs, and search across 50 sessions.',
+  'Stats stay on this device':
+    "The memory-savings dashboard counters never call fetch or XHR, only ever write to chrome.storage.local (never .sync), and the persisted blob contains nothing more than aggregated counts and anonymous heap-byte samples — no URLs, titles, or per-tab identifiers.",
 }
 
 function main() {

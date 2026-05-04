@@ -13,6 +13,7 @@ import { settingsStorage, tabActivityStorage } from '@/shared/storage'
 import { PROTECTED_URL_PATTERNS } from '@/shared/constants'
 import type { Settings } from '@/shared/types'
 import { browser } from '@/shared/browser'
+import { recordSuspension } from '@/shared/stats'
 
 /**
  * Result of checking if a tab can be suspended
@@ -120,6 +121,9 @@ export async function suspendTab(tabId: number): Promise<boolean> {
     const discardedTab = await browser.tabs.discard(tabId)
 
     if (discardedTab?.discarded) {
+      // Fire-and-forget: stats writes are serialized internally and never
+      // block the suspension itself. A storage hiccup must not stop tab work.
+      void recordSuspension(1).catch(() => {})
       return true
     }
     return false

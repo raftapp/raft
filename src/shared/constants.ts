@@ -24,6 +24,8 @@ export const STORAGE_KEYS = {
   EXPORT_REMINDER_STATE: 'raft:exportReminderState',
   /** Last cloud sync trigger error */
   LAST_SYNC_ERROR: 'raft:lastSyncError',
+  /** Local-only suspension/memory stats (proof-point dashboard) */
+  STATS: 'raft:stats',
 } as const
 
 /** Storage keys for browser.storage.sync (backup) */
@@ -258,4 +260,21 @@ export const EXPORT_REMINDER_CONFIG = {
   DEFAULT_INTERVAL_DAYS: 30,
   /** Session count milestones to trigger reminders */
   MILESTONES: [50, 100, 200, 500, 1000],
+} as const
+
+/**
+ * Memory-savings dashboard configuration.
+ *
+ * EST_BYTES_PER_SUSPENSION is a deliberately conservative ballpark — Chrome's
+ * Task Manager typically reports 50-150 MB per modern site, so 85 MB is a
+ * mid-range estimate. The dashboard always labels savings as "approximate"
+ * because we do not (and will not, for privacy) measure per-tab footprint.
+ */
+export const STATS_CONFIG = {
+  /** How long to keep daily buckets before pruning (avoid unbounded growth) */
+  RETENTION_DAYS: 90,
+  /** Estimated bytes freed per successful suspension (Chrome Task Manager mid-range) */
+  EST_BYTES_PER_SUSPENSION: 85 * 1024 * 1024,
+  /** Cap memory samples per daily bucket so storage stays bounded */
+  MAX_SAMPLES_PER_DAY: 24,
 } as const

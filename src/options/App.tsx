@@ -17,6 +17,7 @@ import { ImportExportPanel } from './components/ImportExportPanel'
 import { CloudSyncPanel } from './components/CloudSyncPanel'
 import { DevToolsPanel } from './components/DevToolsPanel'
 import { BackupDashboard } from './components/BackupDashboard'
+import { StatsPanel } from './components/StatsPanel'
 import { ToastContainer, useToast } from '@/shared/components/Toast'
 import { Otter } from '@/shared/components/Otter'
 import {
@@ -29,11 +30,12 @@ import { SkipLink, LiveRegion } from '@/shared/a11y'
 import { useAnnounce, useFocusTrap, useFocusRestore } from '@/shared/a11y'
 import { browser } from '@/shared/browser'
 
-type TabType = 'general' | 'sessions' | 'browser-sync' | 'cloud' | 'about' | 'dev'
+type TabType = 'general' | 'sessions' | 'stats' | 'browser-sync' | 'cloud' | 'about' | 'dev'
 
 const TABS: { id: TabType; label: string; badge?: string }[] = [
   { id: 'general', label: 'General' },
   { id: 'sessions', label: 'Sessions' },
+  { id: 'stats', label: 'Stats' },
   { id: 'browser-sync', label: 'Backup' },
   { id: 'cloud', label: 'Cloud Sync' },
   { id: 'about', label: 'About' },
@@ -48,7 +50,15 @@ export function App() {
   const [loading, setLoading] = useState(true)
   const [activeTab, setActiveTab] = useState<TabType>(() => {
     const hash = globalThis.location?.hash?.slice(1)
-    const validTabs: TabType[] = ['general', 'sessions', 'browser-sync', 'cloud', 'about', 'dev']
+    const validTabs: TabType[] = [
+      'general',
+      'sessions',
+      'stats',
+      'browser-sync',
+      'cloud',
+      'about',
+      'dev',
+    ]
     return validTabs.includes(hash as TabType) ? (hash as TabType) : 'general'
   })
   const [deleteConfirm, setDeleteConfirm] = useState<string | null>(null)
@@ -525,6 +535,24 @@ export function App() {
             ref={(el) => {
               tabRefs.current[2] = el
             }}
+            onClick={() => setActiveTab('stats')}
+            role="tab"
+            aria-selected={activeTab === 'stats'}
+            aria-controls="panel-stats"
+            id="tab-stats"
+            tabIndex={activeTab === 'stats' ? 0 : -1}
+            class={`px-4 py-2 text-sm font-medium border-b-2 -mb-px transition-colors focus:outline-none focus:ring-2 focus:ring-raft-400 focus:ring-offset-2 ${
+              activeTab === 'stats'
+                ? 'border-raft-600 text-raft-600'
+                : 'border-transparent text-raft-500 hover:text-raft-700 hover:border-raft-300'
+            }`}
+          >
+            Stats
+          </button>
+          <button
+            ref={(el) => {
+              tabRefs.current[3] = el
+            }}
             onClick={() => setActiveTab('browser-sync')}
             role="tab"
             aria-selected={activeTab === 'browser-sync'}
@@ -541,7 +569,7 @@ export function App() {
           </button>
           <button
             ref={(el) => {
-              tabRefs.current[3] = el
+              tabRefs.current[4] = el
             }}
             onClick={() => setActiveTab('cloud')}
             role="tab"
@@ -567,7 +595,7 @@ export function App() {
           </button>
           <button
             ref={(el) => {
-              tabRefs.current[4] = el
+              tabRefs.current[5] = el
             }}
             onClick={() => setActiveTab('about')}
             role="tab"
@@ -586,7 +614,7 @@ export function App() {
           {import.meta.env.DEV && (
             <button
               ref={(el) => {
-                tabRefs.current[5] = el
+                tabRefs.current[6] = el
               }}
               onClick={() => setActiveTab('dev')}
               role="tab"
@@ -1074,6 +1102,13 @@ export function App() {
                   </ul>
                 )}
               </section>
+            </div>
+          )}
+
+          {/* Stats Tab */}
+          {activeTab === 'stats' && (
+            <div id="panel-stats" role="tabpanel" aria-labelledby="tab-stats">
+              <StatsPanel onSuccess={success} onError={showError} />
             </div>
           )}
 

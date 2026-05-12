@@ -52,7 +52,6 @@ export function App() {
     return validTabs.includes(hash as TabType) ? (hash as TabType) : 'general'
   })
   const [deleteConfirm, setDeleteConfirm] = useState<string | null>(null)
-  const [isPro, setIsPro] = useState(false) // Checked asynchronously via checkProStatus()
   const [syncStatus, setSyncStatus] = useState<{
     sessionCount: number
     totalBytes: number
@@ -217,9 +216,6 @@ export function App() {
     loadRecoverySnapshots()
     loadExportReminderState()
 
-    // Check Pro status
-    checkProStatus()
-
     // Listen for storage changes to refresh data in real-time
     const handleLocalStorageChange = (changes: {
       [key: string]: browser.storage.StorageChange
@@ -259,20 +255,6 @@ export function App() {
     loadRecoverySnapshots,
     loadExportReminderState,
   ])
-
-  const checkProStatus = () => {
-    browser.runtime
-      .sendMessage({ type: 'PRO_CHECK_STATUS' })
-      .then((response) => {
-        if (response.success) {
-          setIsPro(response.data.isPro)
-        }
-      })
-      .catch(() => {
-        // Pro check failed, default to false
-        setIsPro(false)
-      })
-  }
 
   // Get current tab index for arrow navigation
   const getCurrentTabIndex = () => {
@@ -556,14 +538,6 @@ export function App() {
             }`}
           >
             Cloud Sync
-            {!isPro && (
-              <span
-                class="ml-2 px-1.5 py-0.5 text-xs bg-orange-100 text-orange-600 rounded"
-                aria-hidden="true"
-              >
-                Pro
-              </span>
-            )}
           </button>
           <button
             ref={(el) => {
@@ -828,11 +802,6 @@ export function App() {
                     <strong>does not survive extension uninstall</strong>. Export backups
                     periodically to keep your data safe.
                   </p>
-                  {isPro && (
-                    <p class="text-green-600 mt-2">
-                      You have Pro! Cloud Sync automatically backs up to Google Drive.
-                    </p>
-                  )}
                 </div>
 
                 <div class="space-y-4">
@@ -901,7 +870,7 @@ export function App() {
               class="space-y-4"
             >
               {/* Export Reminder Banner */}
-              {exportReminderState?.pending && !isPro && (
+              {exportReminderState?.pending && (
                 <div
                   role="alert"
                   class="bg-amber-50 border border-amber-200 rounded-lg p-4 flex items-start gap-3"
@@ -1085,10 +1054,7 @@ export function App() {
               aria-labelledby="tab-browser-sync"
               class="space-y-6"
             >
-              <BackupDashboard
-                isPro={isPro}
-                onNavigateTab={setActiveTab as (tab: string) => void}
-              />
+              <BackupDashboard onNavigateTab={setActiveTab as (tab: string) => void} />
 
               {/* Cloud Sync Backup Section */}
               <section class="bg-white rounded-lg shadow-sm border border-raft-200 p-6">
@@ -1166,7 +1132,6 @@ export function App() {
                   <div class="text-sm text-raft-500 space-y-3">
                     <p>
                       Cloud sync backs up your sessions to Google Drive with end-to-end encryption.
-                      Requires Raft Pro.
                     </p>
                     <button
                       onClick={() => setActiveTab('cloud' as TabType)}
@@ -1385,12 +1350,7 @@ export function App() {
           {/* Cloud Sync Tab */}
           {activeTab === 'cloud' && (
             <div id="panel-cloud" role="tabpanel" aria-labelledby="tab-cloud" class="space-y-6">
-              <CloudSyncPanel
-                isPro={isPro}
-                onProStatusChange={checkProStatus}
-                onSuccess={success}
-                onError={showError}
-              />
+              <CloudSyncPanel onSuccess={success} onError={showError} />
             </div>
           )}
 

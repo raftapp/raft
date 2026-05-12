@@ -4,6 +4,16 @@ All notable changes to Raft will be documented in this file.
 
 Format based on [Keep a Changelog](https://keepachangelog.com/).
 
+## [Unreleased]
+
+### Changed
+- **Raft is now fully free.** Removed the Pro tier — Cloud Sync is available to everyone with no purchase required. Removed Lemon Squeezy licensing integration and license-validation network calls.
+
+### Removed
+- Pro upgrade UI, license activation flow, "Remove license" buttons, and `Pro` badges across the options page, backup dashboard, and onboarding.
+- `api.lemonsqueezy.com` from CSP `connect-src` and `host_permissions`.
+- Stored license data is automatically cleared on update.
+
 ## [1.1.3] - 2026-04-27
 
 ### Added

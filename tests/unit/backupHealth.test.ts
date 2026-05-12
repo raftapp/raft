@@ -12,7 +12,6 @@ function makeInput(overrides: Partial<BackupHealthInput> = {}): BackupHealthInpu
     lastRecoveryAt: NOW - 5 * 60000, // 5 min ago
     browserSync: { sessionCount: 3, totalBytes: 5000, maxBytes: 102400, percentUsed: 4.9 },
     cloudSync: { configured: false, enabled: false, unlocked: false, syncing: false },
-    isPro: false,
     exportReminderLastExport: NOW - 10 * 86400000, // 10 days ago
     ...overrides,
   }
@@ -83,10 +82,9 @@ describe('computeBackupHealth', () => {
       expect(result.level).toBe('warning')
     })
 
-    it("returns 'warning' when cloud sync has error and is only configured layer for Pro user", () => {
+    it("returns 'warning' when cloud sync is configured but has an error and is locked", () => {
       const result = computeBackupHealth(
         makeInput({
-          isPro: true,
           cloudSync: {
             configured: true,
             enabled: true,
@@ -191,18 +189,9 @@ describe('computeBackupHealth', () => {
       expect(browserSync!.detail).toContain('may be dropped')
     })
 
-    it("Cloud Sync shows 'disabled' with 'Pro feature' for non-Pro users", () => {
-      const result = computeBackupHealth(makeInput({ isPro: false }))
-      const cloud = result.layers.find((l) => l.name === 'Cloud Sync')
-      expect(cloud).toBeDefined()
-      expect(cloud!.status).toBe('disabled')
-      expect(cloud!.detail).toBe('Pro feature')
-    })
-
-    it("Cloud Sync shows 'disabled' with 'Not connected' for Pro user without config", () => {
+    it("Cloud Sync shows 'disabled' with 'Not connected' when not configured", () => {
       const result = computeBackupHealth(
         makeInput({
-          isPro: true,
           cloudSync: { configured: false, enabled: false, unlocked: false, syncing: false },
         })
       )
@@ -215,7 +204,6 @@ describe('computeBackupHealth', () => {
     it("Cloud Sync shows 'locked' when configured but locked", () => {
       const result = computeBackupHealth(
         makeInput({
-          isPro: true,
           cloudSync: {
             configured: true,
             enabled: true,
@@ -233,7 +221,6 @@ describe('computeBackupHealth', () => {
     it("Cloud Sync shows 'error' when there is a sync error", () => {
       const result = computeBackupHealth(
         makeInput({
-          isPro: true,
           cloudSync: {
             configured: true,
             enabled: true,
@@ -252,7 +239,6 @@ describe('computeBackupHealth', () => {
     it("Cloud Sync shows 'active' when synced recently", () => {
       const result = computeBackupHealth(
         makeInput({
-          isPro: true,
           cloudSync: {
             configured: true,
             enabled: true,
@@ -271,7 +257,6 @@ describe('computeBackupHealth', () => {
     it("Cloud Sync shows 'active' when currently syncing", () => {
       const result = computeBackupHealth(
         makeInput({
-          isPro: true,
           cloudSync: {
             configured: true,
             enabled: true,
@@ -291,7 +276,7 @@ describe('computeBackupHealth', () => {
   // Coverage
   // =========================================================================
   describe('coverage', () => {
-    it('non-Pro: coverage based on browser sync session count', () => {
+    it('without cloud sync: coverage based on browser sync session count', () => {
       const result = computeBackupHealth(
         makeInput({
           totalSessions: 10,
@@ -303,11 +288,10 @@ describe('computeBackupHealth', () => {
       expect(result.coverage.percentage).toBe(60)
     })
 
-    it('Pro with active cloud: coverage = 100%', () => {
+    it('with active cloud sync: coverage = 100%', () => {
       const result = computeBackupHealth(
         makeInput({
           totalSessions: 10,
-          isPro: true,
           browserSync: { sessionCount: 3, totalBytes: 5000, maxBytes: 102400, percentUsed: 4.9 },
           cloudSync: {
             configured: true,
@@ -376,10 +360,9 @@ describe('computeBackupHealth', () => {
       expect(suggestion).toBeUndefined()
     })
 
-    it('suggests cloud sync for Pro users when not connected', () => {
+    it('suggests connecting cloud sync when not configured', () => {
       const result = computeBackupHealth(
         makeInput({
-          isPro: true,
           cloudSync: { configured: false, enabled: false, unlocked: false, syncing: false },
         })
       )
@@ -449,7 +432,6 @@ describe('computeBackupHealth', () => {
     it('suggests unlocking cloud sync when locked', () => {
       const result = computeBackupHealth(
         makeInput({
-          isPro: true,
           cloudSync: {
             configured: true,
             enabled: true,

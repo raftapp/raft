@@ -180,37 +180,8 @@ export const SYNC_RETRY = {
   BACKOFF_MULTIPLIER: 2,
 } as const
 
-/** Pro tier pricing */
-export const PRO_PRICING = {
-  /** One-time price in USD */
-  PRICE_USD: 25,
-} as const
-
-/** Lemon Squeezy configuration */
-export const LEMONSQUEEZY = {
-  /** Store ID (from Lemon Squeezy dashboard) */
-  STORE_ID: '289757',
-  /** Product variant ID for Pro tier */
-  VARIANT_ID: '1294487',
-  /** Checkout URL (replace with your actual checkout link) */
-  CHECKOUT_URL:
-    'https://raftapp.lemonsqueezy.com/checkout/buy/da856db1-d6fe-4347-a8e1-07c42bde0ae3',
-  /** License validation endpoint */
-  VALIDATE_URL: 'https://api.lemonsqueezy.com/v1/licenses/validate',
-  /** License activation endpoint */
-  ACTIVATE_URL: 'https://api.lemonsqueezy.com/v1/licenses/activate',
-  /** License deactivation endpoint */
-  DEACTIVATE_URL: 'https://api.lemonsqueezy.com/v1/licenses/deactivate',
-} as const
-
-/** License storage key */
-export const LICENSE_STORAGE_KEY = 'raft:pro:license'
-
 /** Dev tools storage key for tracking test windows */
 export const DEV_TEST_WINDOWS_KEY = 'raft:dev:testWindows'
-
-/** Dev tools storage key for Pro override toggle */
-export const DEV_PRO_OVERRIDE_KEY = 'raft:dev:proOverride'
 
 /** Recovery snapshot configuration */
 export const RECOVERY_CONFIG = {
@@ -244,8 +215,6 @@ export const BACKUP_HEALTH_CONFIG = {
   SYNC_ATTENTION_PERCENT: 80,
   /** Browser sync usage percent for "warning" */
   SYNC_WARNING_PERCENT: 95,
-  /** Suggest cloud sync when session count exceeds this */
-  SUGGEST_CLOUD_SESSION_COUNT: 10,
   /** Suggest export when session count exceeds this and never exported */
   SUGGEST_EXPORT_SESSION_COUNT: 20,
   /** Suggest export if last export was this many days ago */

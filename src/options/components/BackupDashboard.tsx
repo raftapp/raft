@@ -43,11 +43,10 @@ const LAYER_STATUS_STYLES: Record<string, { icon: string; color: string }> = {
 }
 
 interface BackupDashboardProps {
-  isPro: boolean
   onNavigateTab: (tab: string) => void
 }
 
-export function BackupDashboard({ isPro, onNavigateTab }: BackupDashboardProps) {
+export function BackupDashboard({ onNavigateTab }: BackupDashboardProps) {
   const [health, setHealth] = useState<BackupHealthData | null>(null)
   const [loading, setLoading] = useState(true)
 
@@ -94,7 +93,7 @@ export function BackupDashboard({ isPro, onNavigateTab }: BackupDashboardProps) 
       {/* Layer cards grid */}
       <div class="grid grid-cols-2 gap-3 mb-4">
         {health.layers.map((layer) => (
-          <LayerCard key={layer.name} layer={layer} isPro={isPro} />
+          <LayerCard key={layer.name} layer={layer} />
         ))}
       </div>
 
@@ -148,7 +147,7 @@ export function BackupDashboard({ isPro, onNavigateTab }: BackupDashboardProps) 
   )
 }
 
-function LayerCard({ layer, isPro }: { layer: BackupLayerStatus; isPro: boolean }) {
+function LayerCard({ layer }: { layer: BackupLayerStatus }) {
   const styles = LAYER_STATUS_STYLES[layer.status] || LAYER_STATUS_STYLES.disabled
 
   return (
@@ -156,9 +155,6 @@ function LayerCard({ layer, isPro }: { layer: BackupLayerStatus; isPro: boolean 
       <div class="flex items-center gap-2 mb-1">
         <LayerStatusIcon status={layer.status} class={`w-4 h-4 ${styles.icon}`} />
         <span class="text-sm font-medium text-raft-700">{layer.name}</span>
-        {layer.name === 'Cloud Sync' && !isPro && (
-          <span class="px-1.5 py-0.5 text-xs bg-orange-100 text-orange-600 rounded">Pro</span>
-        )}
       </div>
       <p class="text-xs text-raft-600">{layer.detail}</p>
       {layer.lastSuccessAt && (

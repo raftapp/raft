@@ -8,7 +8,6 @@
 import { useState, useEffect } from 'preact/hooks'
 import { allScenarios } from '@/devtools/scenarios'
 import type { DevScenario } from '@/devtools/types'
-import { DEV_PRO_OVERRIDE_KEY } from '@/shared/constants'
 import { browser } from '@/shared/browser'
 
 interface DevToolsPanelProps {
@@ -19,7 +18,6 @@ interface DevToolsPanelProps {
 export function DevToolsPanel({ onSuccess, onError }: DevToolsPanelProps) {
   const [testWindowCount, setTestWindowCount] = useState(0)
   const [isLoading, setIsLoading] = useState<string | null>(null)
-  const [proOverride, setProOverride] = useState(false)
 
   // Load test window count on mount and after changes
   const loadTestWindowCount = async () => {
@@ -35,21 +33,7 @@ export function DevToolsPanel({ onSuccess, onError }: DevToolsPanelProps) {
 
   useEffect(() => {
     loadTestWindowCount()
-    browser.storage.local.get(DEV_PRO_OVERRIDE_KEY).then((result) => {
-      setProOverride(!!result[DEV_PRO_OVERRIDE_KEY])
-    })
   }, [])
-
-  const handleProOverrideToggle = async () => {
-    const newValue = !proOverride
-    if (newValue) {
-      await browser.storage.local.set({ [DEV_PRO_OVERRIDE_KEY]: true })
-    } else {
-      await browser.storage.local.remove(DEV_PRO_OVERRIDE_KEY)
-    }
-    setProOverride(newValue)
-    onSuccess(newValue ? 'Pro override enabled' : 'Pro override disabled')
-  }
 
   const handleCreateScenario = async (scenario: DevScenario) => {
     setIsLoading(scenario.id)
@@ -115,28 +99,6 @@ export function DevToolsPanel({ onSuccess, onError }: DevToolsPanelProps) {
           </div>
         </div>
       </div>
-
-      {/* Pro Override */}
-      <section class="bg-white rounded-lg shadow-sm border border-raft-200 p-6">
-        <div class="flex items-center justify-between">
-          <div>
-            <h2 class="text-lg font-semibold text-raft-900">Pro Override</h2>
-            <p class="text-sm text-raft-600 mt-1">
-              Bypass license checks to test Cloud Sync without a Lemon Squeezy key.
-            </p>
-          </div>
-          <button
-            onClick={handleProOverrideToggle}
-            class={`relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors ${proOverride ? 'bg-green-500' : 'bg-raft-300'}`}
-            role="switch"
-            aria-checked={proOverride}
-          >
-            <span
-              class={`pointer-events-none inline-block h-5 w-5 rounded-full bg-white shadow ring-0 transition-transform ${proOverride ? 'translate-x-5' : 'translate-x-0'}`}
-            />
-          </button>
-        </div>
-      </section>
 
       {/* Test Scenarios */}
       <section class="bg-white rounded-lg shadow-sm border border-raft-200 p-6">

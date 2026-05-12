@@ -53,6 +53,5 @@ For more detail, see our [Trust page](https://raftapp.io/trust).
 
 - Chrome browser vulnerabilities (report to [Chromium](https://bugs.chromium.org/))
 - Google Drive or Google OAuth service issues (report to [Google](https://about.google/intl/en/contact-google/))
-- Lemon Squeezy payment platform issues
 - Social engineering attacks
 - Attacks requiring physical access to the device

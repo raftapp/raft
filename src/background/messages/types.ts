@@ -34,12 +34,6 @@ export type MessageType =
       settings: Partial<import('@/shared/cloudSync').CloudSyncSettings>
     }
   | { type: 'CLOUD_GET_SYNCED_IDS' }
-  // Pro licensing messages
-  | { type: 'PRO_CHECK_STATUS' }
-  | { type: 'PRO_OPEN_CHECKOUT' }
-  | { type: 'PRO_ACTIVATE_LICENSE'; licenseKey: string }
-  | { type: 'PRO_GET_LICENSE' }
-  | { type: 'PRO_CLEAR_LICENSE' }
   // Browser sync status
   | { type: 'GET_SYNC_STATUS' }
   | { type: 'RESTORE_FROM_SYNC' }

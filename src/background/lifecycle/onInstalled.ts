@@ -51,6 +51,14 @@ export async function handleInstalled(details: chrome.runtime.InstalledDetails):
       // Ignore if doesn't exist
     }
 
+    // Migration: Pro tier removed — clear any leftover license data
+    try {
+      await browser.storage.local.remove(['raft:pro:license', 'raft:dev:proOverride'])
+      await browser.storage.sync.remove('raft:pro:license')
+    } catch {
+      // Ignore if sync storage is unavailable
+    }
+
     // On update, ensure existing sessions are backed up to sync
     // This helps users who upgrade from before sync was added
     const sessions = await sessionsStorage.getAll()

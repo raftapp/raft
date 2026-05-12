@@ -2,7 +2,6 @@ import { settingsStorage } from '@/shared/storage'
 import { computeBackupHealth } from '@/shared/backupHealth'
 import { syncEngine } from '@/shared/cloudSync'
 import { getSyncStatus } from '@/shared/syncBackup'
-import { isProUser } from '@/shared/licensing'
 import { getAllSessions } from '../sessions'
 import { getRecoverySnapshots } from '../recovery'
 import type { MessageResponse, MessageType } from './types'
@@ -12,14 +11,13 @@ type BackupHealthMessage = Extract<MessageType, { type: 'GET_BACKUP_HEALTH' }>
 export async function handleBackupHealthMessage(
   _message: BackupHealthMessage
 ): Promise<MessageResponse> {
-  const [allSessions, healthSettings, browserSyncStatus, cloudStatus, snapshots, isPro] =
+  const [allSessions, healthSettings, browserSyncStatus, cloudStatus, snapshots] =
     await Promise.all([
       getAllSessions(),
       settingsStorage.get(),
       getSyncStatus(),
       syncEngine.getSyncStatus(),
       getRecoverySnapshots(),
-      isProUser(),
     ])
 
   // Derive lastAutoSaveAt from most recent auto-save session
@@ -48,7 +46,6 @@ export async function handleBackupHealthMessage(
       lastError: cloudStatus.lastError,
       syncing: cloudStatus.syncing,
     },
-    isPro,
     exportReminderLastExport: healthSettings.exportReminder.lastExportDate,
   }
 

@@ -2,7 +2,6 @@ import type { MessageResponse, MessageType } from './types'
 import { handleSuspensionMessage } from './suspension'
 import { handleSessionsMessage } from './sessions'
 import { handleCloudMessage } from './cloud'
-import { handleProMessage } from './pro'
 import { handleRecoveryMessage } from './recovery'
 import { handleExportReminderMessage } from './exportReminder'
 import { handleDedupMessage } from './dedup'
@@ -54,13 +53,6 @@ export async function handleMessage(message: MessageType): Promise<MessageRespon
       case 'RESTORE_FROM_SYNC':
       case 'CLEAR_SYNC_DATA':
         return await handleCloudMessage(message)
-
-      case 'PRO_CHECK_STATUS':
-      case 'PRO_OPEN_CHECKOUT':
-      case 'PRO_ACTIVATE_LICENSE':
-      case 'PRO_GET_LICENSE':
-      case 'PRO_CLEAR_LICENSE':
-        return await handleProMessage(message)
 
       case 'GET_RECOVERY_SNAPSHOTS':
       case 'RESTORE_RECOVERY_SNAPSHOT':

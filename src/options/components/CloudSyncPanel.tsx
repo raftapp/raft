@@ -10,7 +10,6 @@ import type { CloudSyncSettings, SyncState } from '@/shared/cloudSync'
 import { DEFAULT_CLOUD_SYNC_SETTINGS } from '@/shared/cloudSync'
 import { formatRelativeTime } from '@/shared/utils'
 import { EncryptionSetup } from './EncryptionSetup'
-import { ProUpgrade } from './ProUpgrade'
 import { useFocusTrap, useFocusRestore } from '@/shared/a11y'
 import { browser } from '@/shared/browser'
 
@@ -23,18 +22,11 @@ interface CloudSyncStatus extends SyncState {
 }
 
 interface CloudSyncPanelProps {
-  isPro: boolean
-  onProStatusChange: () => void
   onSuccess: (message: string) => void
   onError: (message: string) => void
 }
 
-export function CloudSyncPanel({
-  isPro,
-  onProStatusChange,
-  onSuccess,
-  onError,
-}: CloudSyncPanelProps) {
+export function CloudSyncPanel({ onSuccess, onError }: CloudSyncPanelProps) {
   const [status, setStatus] = useState<CloudSyncStatus | null>(null)
   const [settings, setSettings] = useState<CloudSyncSettings>(DEFAULT_CLOUD_SYNC_SETTINGS)
   const [loading, setLoading] = useState(true)
@@ -120,8 +112,6 @@ export function CloudSyncPanel({
   }, [loadStatus])
 
   const handleConnect = async () => {
-    if (!isPro) return
-
     setConnecting(true)
     try {
       const response = await browser.runtime.sendMessage({ type: 'CLOUD_CONNECT' })
@@ -377,14 +367,6 @@ export function CloudSyncPanel({
     }
   }
 
-  const handleRemoveLicense = async () => {
-    if (!confirm('Are you sure you want to remove your license from this device?')) {
-      return
-    }
-    await browser.runtime.sendMessage({ type: 'PRO_CLEAR_LICENSE' })
-    onProStatusChange()
-  }
-
   const handleSettingChange = async (updates: Partial<CloudSyncSettings>) => {
     const updated = { ...settings, ...updates }
     setSettings(updated)
@@ -397,11 +379,6 @@ export function CloudSyncPanel({
         <p class="text-raft-500">Loading cloud sync status...</p>
       </section>
     )
-  }
-
-  // Show Pro upgrade prompt if not Pro
-  if (!isPro) {
-    return <ProUpgrade onLicenseActivated={onProStatusChange} />
   }
 
   // Show encryption setup modal
@@ -887,13 +864,6 @@ export function CloudSyncPanel({
           <p class="text-xs text-raft-400">
             Raft only accesses its own app folder. We cannot see your other Drive files.
           </p>
-
-          <button
-            onClick={handleRemoveLicense}
-            class="text-sm text-raft-400 hover:text-raft-600 underline"
-          >
-            Remove license from this device
-          </button>
         </div>
       ) : (
         // Connected state
@@ -1032,13 +1002,6 @@ export function CloudSyncPanel({
               class="text-sm text-raft-600 hover:text-raft-800 underline"
             >
               Generate new recovery key
-            </button>
-
-            <button
-              onClick={handleRemoveLicense}
-              class="block text-sm text-raft-400 hover:text-raft-600 underline"
-            >
-              Remove license from this device
             </button>
           </div>
         </div>

@@ -56,7 +56,6 @@ export interface BackupHealthInput {
     lastError?: string
     syncing: boolean
   }
-  isPro: boolean
   exportReminderLastExport?: number
 }
 
@@ -157,7 +156,7 @@ export function computeBackupHealth(input: BackupHealthInput): BackupHealthData 
   }
 
   // ===== Layer 4: Cloud Sync =====
-  if (input.isPro && input.cloudSync.configured) {
+  if (input.cloudSync.configured) {
     if (!input.cloudSync.unlocked) {
       layers.push({
         name: 'Cloud Sync',
@@ -195,7 +194,7 @@ export function computeBackupHealth(input: BackupHealthInput): BackupHealthData 
         detail: input.cloudSync.lastSyncAt ? 'Connected' : 'Never synced',
       })
     }
-  } else if (input.isPro) {
+  } else {
     layers.push({
       name: 'Cloud Sync',
       status: 'disabled',
@@ -206,18 +205,6 @@ export function computeBackupHealth(input: BackupHealthInput): BackupHealthData 
       target: 'cloud',
       actionLabel: 'Connect',
     })
-  } else {
-    layers.push({
-      name: 'Cloud Sync',
-      status: 'disabled',
-      detail: 'Pro feature',
-    })
-    if (input.totalSessions >= BACKUP_HEALTH_CONFIG.SUGGEST_CLOUD_SESSION_COUNT) {
-      suggestions.push({
-        message: 'Upgrade to Pro for encrypted cloud backup',
-        target: 'cloud',
-      })
-    }
   }
 
   // ===== Export suggestion =====
@@ -245,10 +232,7 @@ export function computeBackupHealth(input: BackupHealthInput): BackupHealthData 
     (l) => l.status === 'active' && l.name !== 'Recovery Snapshots'
   )
   const hasCloudError =
-    input.isPro &&
-    input.cloudSync.configured &&
-    input.cloudSync.lastError &&
-    !input.cloudSync.unlocked
+    input.cloudSync.configured && input.cloudSync.lastError && !input.cloudSync.unlocked
 
   // Find the most recent successful backup time across all layers
   const allSuccessTimes = layers
@@ -274,12 +258,7 @@ export function computeBackupHealth(input: BackupHealthInput): BackupHealthData 
 
   // ===== Coverage =====
   let backedUpSessions: number
-  if (
-    input.isPro &&
-    input.cloudSync.configured &&
-    input.cloudSync.unlocked &&
-    !input.cloudSync.lastError
-  ) {
+  if (input.cloudSync.configured && input.cloudSync.unlocked && !input.cloudSync.lastError) {
     // Cloud sync: assume all sessions covered when active
     backedUpSessions = input.totalSessions
   } else {

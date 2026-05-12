@@ -1,6 +1,5 @@
 import { settingsStorage, sessionsStorage, storage } from '@/shared/storage'
 import { STORAGE_KEYS, EXPORT_REMINDER_CONFIG } from '@/shared/constants'
-import { isProUser } from '@/shared/licensing'
 import type { MessageResponse, MessageType } from './types'
 
 /**
@@ -27,11 +26,6 @@ export async function checkExportReminder(): Promise<void> {
   const settings = await settingsStorage.get()
 
   if (!settings.exportReminder.enabled) {
-    return
-  }
-
-  // Skip for Pro users (they have cloud backup)
-  if (await isProUser()) {
     return
   }
 

@@ -22,7 +22,6 @@ import {
   createVerificationHash,
 } from '@/shared/cloudSync'
 import type { CloudTokens, EncryptedPayload } from '@/shared/cloudSync'
-import { canUseCloudSync } from '@/shared/licensing'
 import { setupCloudSyncAlarm } from '../alarms'
 import type { MessageResponse, MessageType } from './types'
 
@@ -55,11 +54,6 @@ type CloudMessage = Extract<
 export async function handleCloudMessage(message: CloudMessage): Promise<MessageResponse> {
   switch (message.type) {
     case 'CLOUD_CONNECT': {
-      // Check Pro status first
-      if (!(await canUseCloudSync())) {
-        return { success: false, error: 'Cloud sync requires Pro. Please upgrade.' }
-      }
-
       // Launch OAuth flow and get tokens
       const result = await launchGoogleOAuth()
 

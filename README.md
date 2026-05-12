@@ -39,10 +39,10 @@ Named after the way otters hold hands while sleeping to stay together — a grou
 - Export sessions as JSON or text
 - Import from OneTab, Session Buddy, Tab Session Manager, Toby
 
-**Cloud Sync (Pro)**
+**Cloud Sync**
 - End-to-end encryption (AES-256-GCM with PBKDF2)
 - Google Drive integration via private app-data folder
-- One-time $25 purchase — no subscriptions
+- Free and optional
 
 ## Trust Report
 
@@ -56,7 +56,7 @@ See [Privacy Policy](https://raftapp.io/privacy) for full details.
 
 Raft collects **zero analytics, telemetry, or usage data**. Eight automated tests verify that no `fetch()` or `XMLHttpRequest` calls exist in the save, restore, import, or export code paths — your session data never touches a network unless you explicitly enable cloud sync.
 
-The extension's Content Security Policy restricts all network access to `googleapis.com` (for cloud sync) and `api.lemonsqueezy.com` (for license validation). No other outbound connections are possible.
+The extension's Content Security Policy restricts all network access to `googleapis.com` (for cloud sync). No other outbound connections are possible.
 
 See [Privacy Policy](https://raftapp.io/privacy).
 
@@ -76,7 +76,7 @@ Raft requests only five permissions, each with a specific purpose:
 | `storage` | Persist sessions and settings to `chrome.storage.local` |
 | `alarms` | Run periodic checks for auto-suspend and auto-save |
 | `contextMenus` | Add "Suspend tab" to the right-click menu |
-| `identity` | Google OAuth for cloud sync (Pro only) |
+| `identity` | Google OAuth for cloud sync |
 
 **Not requested:** `history`, `bookmarks`, `webRequest`, `<all_urls>`, `notifications`. See [Permissions Explained](https://raftapp.io/permissions) for full details.
 

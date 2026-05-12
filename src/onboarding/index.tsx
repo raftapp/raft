@@ -138,8 +138,8 @@ function App() {
             </p>
             <p>We'll remind you periodically to export backups. Your data, your control.</p>
             <p class="text-blue-600 font-medium">
-              Want automatic cloud backup? Upgrade to Pro for Google Drive sync that survives
-              anything.
+              Want automatic cloud backup? Set up Cloud Sync in options for encrypted Google Drive
+              backup.
             </p>
           </div>
         </div>

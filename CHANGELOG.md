@@ -4,7 +4,7 @@ All notable changes to Raft will be documented in this file.
 
 Format based on [Keep a Changelog](https://keepachangelog.com/).
 
-## [Unreleased]
+## [1.2.0] - 2026-05-12
 
 ### Changed
 - **Raft is now fully free.** Removed the Pro tier — Cloud Sync is available to everyone with no purchase required. Removed Lemon Squeezy licensing integration and license-validation network calls.
@@ -80,6 +80,7 @@ Initial release on Chrome Web Store.
 - Cloud Sync (Pro): client-side encrypted backup to Google Drive
 - Onboarding page for first-time users
 
+[1.2.0]: https://github.com/raftapp/raft/compare/v1.1.3...v1.2.0
 [1.1.3]: https://github.com/raftapp/raft/compare/v1.1.2...v1.1.3
 [1.1.2]: https://github.com/raftapp/raft/compare/v1.1.1...v1.1.2
 [1.1.1]: https://github.com/raftapp/raft/compare/v1.1.0...v1.1.1

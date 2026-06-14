@@ -11,7 +11,7 @@
 
 import { settingsStorage, tabActivityStorage } from '@/shared/storage'
 import { PROTECTED_URL_PATTERNS } from '@/shared/constants'
-import type { Settings } from '@/shared/types'
+import type { AutoSuspendRule, Settings } from '@/shared/types'
 import { browser } from '@/shared/browser'
 
 /**
@@ -90,25 +90,51 @@ function matchesWhitelist(url: string, whitelist: string[]): boolean {
 const MAX_AUTO_SUSPEND_REGEX_LENGTH = 500
 
 /**
- * Check if a URL matches any auto-suspend exception regex.
- * Regexes are tested case-insensitively against the full URL.
+ * Check if a tab matches any auto-suspend exception rule.
+ * - For URL rules, the pattern is tested case-insensitively against the full tab URL.
+ * - For tab group name rules, the pattern is tested case-insensitively against the
+ *   native tab group title. If the tab has no group, it cannot match.
  * Invalid or too-long patterns are ignored.
  */
-function matchesAutoSuspendRegex(url: string, regexes: string[]): boolean {
-  return regexes.some((pattern) => {
-    if (!pattern.trim()) return false
-    if (pattern.length > MAX_AUTO_SUSPEND_REGEX_LENGTH) {
-      console.warn('[Raft] Auto-suspend regex too long, skipping:', pattern.slice(0, 50) + '...')
-      return false
+async function matchesAutoSuspendRule(
+  tab: browser.tabs.Tab,
+  rule: AutoSuspendRule
+): Promise<boolean> {
+  const pattern = rule.pattern
+  if (!pattern.trim()) return false
+  if (pattern.length > MAX_AUTO_SUSPEND_REGEX_LENGTH) {
+    console.warn('[Raft] Auto-suspend regex too long, skipping:', pattern.slice(0, 50) + '...')
+    return false
+  }
+  try {
+    const regex = new RegExp(pattern, 'i')
+    if (rule.target === 'tabGroupName') {
+      if (!tab.groupId || tab.groupId === -1) return false
+      const groups = await browser.tabGroups.query({})
+      const group = groups.find((g) => g.id === tab.groupId)
+      if (!group) return false
+      return regex.test(group.title ?? '')
     }
-    try {
-      const regex = new RegExp(pattern, 'i')
-      return regex.test(url)
-    } catch {
-      console.warn('[Raft] Invalid auto-suspend regex:', pattern)
-      return false
+    return regex.test(tab.url ?? '')
+  } catch {
+    console.warn('[Raft] Invalid auto-suspend regex:', pattern)
+    return false
+  }
+}
+
+/**
+ * Check if a tab matches any auto-suspend exception rule.
+ */
+async function matchesAutoSuspendRules(
+  tab: browser.tabs.Tab,
+  rules: AutoSuspendRule[]
+): Promise<boolean> {
+  for (const rule of rules) {
+    if (await matchesAutoSuspendRule(tab, rule)) {
+      return true
     }
-  })
+  }
+  return false
 }
 
 /**
@@ -152,8 +178,8 @@ export async function canSuspendTab(
     return { canSuspend: false, reason: 'Whitelisted' }
   }
 
-  // Auto-suspend regex exceptions only apply to automatic suspension.
-  if (reason === 'auto' && matchesAutoSuspendRegex(tab.url, s.suspension.autoSuspendRegexes)) {
+  // Auto-suspend exception rules only apply to automatic suspension.
+  if (reason === 'auto' && (await matchesAutoSuspendRules(tab, s.suspension.autoSuspendRules))) {
     return { canSuspend: false, reason: 'Auto-suspend exception' }
   }
 
@@ -175,7 +201,7 @@ export async function suspendTab(tabId: number, options: SuspendOptions = {}): P
     if (
       !ignoreRegex &&
       tab.url &&
-      matchesAutoSuspendRegex(tab.url, (await settingsStorage.get()).suspension.autoSuspendRegexes)
+      (await matchesAutoSuspendRules(tab, (await settingsStorage.get()).suspension.autoSuspendRules))
     ) {
       return false
     }
@@ -298,25 +324,67 @@ export async function checkForInactiveTabs(): Promise<number> {
 }
 
 /**
- * Find currently open tabs whose full URL matches at least one of the given regex patterns.
+ * Find currently open tabs matching any of the given auto-suspend rules.
  * Used by the settings UI to preview matching tabs.
+ *
+ * For URL rules, individual tabs are returned. For tab group name rules,
+ * every tab belonging to a group whose title matches the rule is returned.
  */
 export async function findMatchingTabs(
-  regexes: string[]
-): Promise<Array<{ id: number; title?: string; url: string; windowId?: number }>> {
-  if (!regexes.some((r) => r.trim())) {
+  rules: AutoSuspendRule[]
+): Promise<
+  Array<{ id: number; title?: string; url: string; windowId?: number; groupName?: string }>
+> {
+  if (!rules.some((r) => r.pattern.trim())) {
     return []
   }
 
   const tabs = await browser.tabs.query({})
-  const matching = tabs.filter((tab) => tab.url && matchesAutoSuspendRegex(tab.url, regexes))
+  const groups = await browser.tabGroups.query({})
+  const groupById = new Map(groups.map((g) => [g.id, g]))
 
-  return matching.map((tab) => ({
-    id: tab.id ?? 0,
-    title: tab.title,
-    url: tab.url ?? '',
-    windowId: tab.windowId,
-  }))
+  const matchingIds = new Set<number>()
+  const groupNames = new Map<number, string>()
+
+  for (const rule of rules) {
+    if (!rule.pattern.trim()) continue
+    try {
+      const regex = new RegExp(rule.pattern, 'i')
+      if (rule.target === 'tabGroupName') {
+        for (const group of groups) {
+          if (regex.test(group.title ?? '')) {
+            for (const tab of tabs) {
+              if (tab.groupId === group.id && tab.id !== undefined) {
+                matchingIds.add(tab.id)
+                groupNames.set(tab.id, group.title ?? '')
+              }
+            }
+          }
+        }
+      } else {
+        for (const tab of tabs) {
+          if (tab.id !== undefined && regex.test(tab.url ?? '')) {
+            matchingIds.add(tab.id)
+          }
+        }
+      }
+    } catch {
+      // Ignore invalid patterns
+    }
+  }
+
+  return tabs
+    .filter((tab) => tab.id !== undefined && matchingIds.has(tab.id))
+    .map((tab) => {
+      const group = tab.groupId !== undefined ? groupById.get(tab.groupId) : undefined
+      return {
+        id: tab.id ?? 0,
+        title: tab.title,
+        url: tab.url ?? '',
+        windowId: tab.windowId,
+        groupName: groupNames.get(tab.id ?? 0) ?? group?.title,
+      }
+    })
 }
 
 /**

@@ -102,8 +102,8 @@ export async function handleSuspensionMessage(
 
     case 'GET_MATCHING_TABS': {
       const settings = await settingsStorage.get()
-      const regexes = message.regexes ?? settings.suspension.autoSuspendRegexes
-      const matching = await findMatchingTabs(regexes)
+      const rules = message.rules ?? settings.suspension.autoSuspendRules
+      const matching = await findMatchingTabs(rules)
       return { success: true, data: matching }
     }
 

@@ -111,6 +111,23 @@ export interface Folder {
 }
 
 /**
+ * Target of an auto-suspend exception rule.
+ * - 'url': pattern is matched against the full tab URL.
+ * - 'tabGroupName': pattern is matched against the native tab group title.
+ */
+export type AutoSuspendTarget = 'url' | 'tabGroupName'
+
+/**
+ * Rule that prevents automatic suspension/hibernation.
+ */
+export interface AutoSuspendRule {
+  /** Regex pattern tested case-insensitively */
+  pattern: string
+  /** What the pattern is matched against */
+  target: AutoSuspendTarget
+}
+
+/**
  * User settings for the extension
  */
 export interface Settings {
@@ -128,8 +145,8 @@ export interface Settings {
     neverSuspendForms: boolean
     /** URL patterns to whitelist (never suspend) */
     whitelist: string[]
-    /** Regex patterns that prevent automatic suspension/hibernation only */
-    autoSuspendRegexes: string[]
+    /** Rules that prevent automatic suspension/hibernation only */
+    autoSuspendRules: AutoSuspendRule[]
     /** Hibernate all restored tabs immediately when Chrome starts */
     hibernateOnStartup: boolean
   }
@@ -165,6 +182,17 @@ export interface Settings {
 /**
  * Default settings for new installations
  */
+/**
+ * Migrate legacy autoSuspendRegexes (string[]) to AutoSuspendRule[].
+ * Rules are converted with target 'url' to preserve existing behavior.
+ */
+export function migrateAutoSuspendRules(
+  legacy: string[] | undefined
+): AutoSuspendRule[] | undefined {
+  if (!legacy || !Array.isArray(legacy)) return undefined
+  return legacy.map((pattern) => ({ pattern, target: 'url' as const }))
+}
+
 export const DEFAULT_SETTINGS: Settings = {
   suspension: {
     enabled: true,
@@ -173,7 +201,7 @@ export const DEFAULT_SETTINGS: Settings = {
     neverSuspendAudio: true,
     neverSuspendForms: true,
     whitelist: [],
-    autoSuspendRegexes: [],
+    autoSuspendRules: [],
     hibernateOnStartup: false,
   },
   autoSave: {

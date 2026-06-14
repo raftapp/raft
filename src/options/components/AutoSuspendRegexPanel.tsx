@@ -1,24 +1,25 @@
 /**
  * Auto-Suspend Regex Exceptions Panel
  *
- * Allows users to define regex patterns that prevent automatic suspension,
- * startup hibernation, and bulk manual actions ("Suspend All Tabs" / "Suspend
- * Other Tabs" from the popup). Direct actions such as the keyboard shortcut
- * and context menu ignore these exceptions and still suspend.
+ * Allows users to define rules that prevent automatic suspension,
+ * startup hibernation, and bulk manual actions ("Suspend All Tabs" /
+ * "Suspend Other Tabs" from the popup). Direct actions such as the
+ * keyboard shortcut and context menu ignore these exceptions and still
+ * suspend.
  *
- * Each pattern is an independent input. Matching is OR: a tab is exempt if
- * its full URL matches at least one valid regex (case-insensitive).
+ * Each rule combines a pattern with a target. Matching is OR: a tab is
+ * exempt if it matches at least one valid rule (case-insensitive).
  */
 
 import { useState, useEffect, useRef, useCallback } from 'preact/hooks'
-import type { Settings } from '@/shared/types'
+import type { Settings, AutoSuspendRule, AutoSuspendTarget } from '@/shared/types'
 import { browser } from '@/shared/browser'
 import { Dialog } from '@/shared/a11y'
 import { useFocusTrap, useFocusRestore } from '@/shared/a11y'
 
 interface AutoSuspendRegexPanelProps {
   settings: Settings
-  onChange: (regexes: string[]) => void
+  onChange: (rules: AutoSuspendRule[]) => void
 }
 
 interface MatchingTab {
@@ -26,9 +27,15 @@ interface MatchingTab {
   title?: string
   url: string
   windowId?: number
+  groupName?: string
 }
 
-function isValidRegex(pattern: string): boolean {
+const TARGET_OPTIONS: { value: AutoSuspendTarget; label: string }[] = [
+  { value: 'url', label: 'Tab URL' },
+  { value: 'tabGroupName', label: 'Tab Group Name' },
+]
+
+function isValidPattern(pattern: string): boolean {
   if (!pattern.trim()) return true
   try {
     new RegExp(pattern, 'i')
@@ -38,10 +45,14 @@ function isValidRegex(pattern: string): boolean {
   }
 }
 
+function isValidRule(rule: AutoSuspendRule): boolean {
+  return rule.pattern.trim().length > 0 && isValidPattern(rule.pattern)
+}
+
 export function AutoSuspendRegexPanel({ settings, onChange }: AutoSuspendRegexPanelProps) {
-  const [regexes, setRegexes] = useState<string[]>(settings.suspension.autoSuspendRegexes)
+  const [rules, setRules] = useState<AutoSuspendRule[]>(settings.suspension.autoSuspendRules)
   const [matchingTabs, setMatchingTabs] = useState<MatchingTab[]>([])
-  const [selectedRegexIndex, setSelectedRegexIndex] = useState<number | null>(null)
+  const [selectedRuleIndex, setSelectedRuleIndex] = useState<number | null>(null)
   const [loading, setLoading] = useState(false)
   const [dialogOpen, setDialogOpen] = useState(false)
   const dialogRef = useRef<HTMLDivElement>(null)
@@ -51,13 +62,13 @@ export function AutoSuspendRegexPanel({ settings, onChange }: AutoSuspendRegexPa
 
   // Keep local state in sync if settings change externally
   useEffect(() => {
-    setRegexes(settings.suspension.autoSuspendRegexes)
-  }, [settings.suspension.autoSuspendRegexes])
+    setRules(settings.suspension.autoSuspendRules)
+  }, [settings.suspension.autoSuspendRules])
 
-  // Query matching tabs whenever regexes change
+  // Query matching tabs whenever rules change
   useEffect(() => {
-    const validRegexes = regexes.filter((r) => isValidRegex(r) && r.trim())
-    if (validRegexes.length === 0) {
+    const validRules = rules.filter(isValidRule)
+    if (validRules.length === 0) {
       setMatchingTabs([])
       return
     }
@@ -65,7 +76,7 @@ export function AutoSuspendRegexPanel({ settings, onChange }: AutoSuspendRegexPa
     let cancelled = false
     setLoading(true)
     browser.runtime
-      .sendMessage({ type: 'GET_MATCHING_TABS', regexes: validRegexes })
+      .sendMessage({ type: 'GET_MATCHING_TABS', rules: validRules })
       .then((response: { success: boolean; data?: MatchingTab[]; error?: string }) => {
         if (cancelled) return
         if (response.success && response.data) {
@@ -88,39 +99,48 @@ export function AutoSuspendRegexPanel({ settings, onChange }: AutoSuspendRegexPa
     return () => {
       cancelled = true
     }
-  }, [regexes])
+  }, [rules])
 
-  const updateRegexes = useCallback(
-    (next: string[]) => {
-      setRegexes(next)
+  const updateRules = useCallback(
+    (next: AutoSuspendRule[]) => {
+      setRules(next)
       onChange(next)
     },
     [onChange]
   )
 
-  const handleChange = (index: number, value: string) => {
-    const next = [...regexes]
-    next[index] = value
-    updateRegexes(next)
+  const handlePatternChange = (index: number, value: string) => {
+    const next = [...rules]
+    next[index] = { ...next[index], pattern: value }
+    updateRules(next)
+  }
+
+  const handleTargetChange = (index: number, target: AutoSuspendTarget) => {
+    const next = [...rules]
+    next[index] = { ...next[index], target }
+    updateRules(next)
   }
 
   const handleAdd = () => {
-    updateRegexes([...regexes, ''])
+    updateRules([...rules, { pattern: '', target: 'url' }])
   }
 
   const handleRemove = (index: number) => {
-    const next = regexes.filter((_, i) => i !== index)
+    const next = rules.filter((_, i) => i !== index)
     if (next.length === 0) {
-      updateRegexes([''])
+      updateRules([{ pattern: '', target: 'url' }])
     } else {
-      updateRegexes(next)
+      updateRules(next)
     }
   }
 
-  const countForRegex = (pattern: string): number => {
-    if (!pattern.trim() || !isValidRegex(pattern)) return 0
+  const countForRule = (rule: AutoSuspendRule): number => {
+    if (!isValidRule(rule)) return 0
     try {
-      const regex = new RegExp(pattern, 'i')
+      const regex = new RegExp(rule.pattern, 'i')
+      if (rule.target === 'tabGroupName') {
+        return matchingTabs.filter((tab) => regex.test(tab.groupName ?? '')).length
+      }
       return matchingTabs.filter((tab) => regex.test(tab.url)).length
     } catch {
       return 0
@@ -128,13 +148,13 @@ export function AutoSuspendRegexPanel({ settings, onChange }: AutoSuspendRegexPa
   }
 
   const openDialog = (index: number) => {
-    setSelectedRegexIndex(index)
+    setSelectedRuleIndex(index)
     setDialogOpen(true)
   }
 
   const closeDialog = () => {
     setDialogOpen(false)
-    setSelectedRegexIndex(null)
+    setSelectedRuleIndex(null)
     restoreFocus()
   }
 
@@ -150,18 +170,26 @@ export function AutoSuspendRegexPanel({ settings, onChange }: AutoSuspendRegexPa
     }
   }
 
-  const selectedPattern = selectedRegexIndex !== null ? regexes[selectedRegexIndex] : ''
+  const selectedRule = selectedRuleIndex !== null ? rules[selectedRuleIndex] : null
   const dialogTabs =
-    selectedRegexIndex !== null && selectedPattern.trim() && isValidRegex(selectedPattern)
+    selectedRule && isValidRule(selectedRule)
       ? matchingTabs.filter((tab) => {
           try {
-            const regex = new RegExp(selectedPattern, 'i')
+            const regex = new RegExp(selectedRule.pattern, 'i')
+            if (selectedRule.target === 'tabGroupName') {
+              return regex.test(tab.groupName ?? '')
+            }
             return regex.test(tab.url)
           } catch {
             return false
           }
         })
       : []
+
+  const placeholderFor = (target: AutoSuspendTarget) =>
+    target === 'tabGroupName'
+      ? 'e.g. ^Work.*'
+      : 'e.g. ^https://mail\\.google\\.com/.*'
 
   return (
     <div class="space-y-3">
@@ -172,36 +200,52 @@ export function AutoSuspendRegexPanel({ settings, onChange }: AutoSuspendRegexPa
           Direct actions (keyboard shortcut, context menu) still suspend.
         </p>
         <p class="mt-1 text-raft-500">
-          Matching is case-insensitive and applied to the full tab URL. Multiple rules are combined
-          with OR.
+          Matching is case-insensitive. Multiple rules are combined with OR.
         </p>
       </div>
 
       <div class="space-y-2">
-        {regexes.map((pattern, index) => {
-          const valid = isValidRegex(pattern)
-          const count = countForRegex(pattern)
+        {rules.map((rule, index) => {
+          const valid = isValidPattern(rule.pattern)
+          const count = countForRule(rule)
 
           return (
             <div key={index} class="flex items-start gap-2">
               <label htmlFor={`auto-suspend-regex-${index}`} class="sr-only">
-                Auto-suspend exception regex {index + 1}
+                Auto-suspend exception rule {index + 1}
               </label>
               <div class="flex-1 relative">
-                <input
-                  id={`auto-suspend-regex-${index}`}
-                  type="text"
-                  value={pattern}
-                  onInput={(e) => handleChange(index, (e.target as HTMLInputElement).value)}
-                  placeholder="e.g. ^https://mail\\.google\\.com/.*"
-                  class={`w-full px-3 py-1.5 text-sm border rounded-md focus:ring-raft-500 focus:border-raft-500 ${
-                    valid
-                      ? 'border-raft-300'
-                      : 'border-red-300 focus:ring-red-500 focus:border-red-500'
-                  }`}
-                  aria-invalid={!valid}
-                  aria-describedby={!valid ? `regex-error-${index}` : undefined}
-                />
+                <div class="flex rounded-md shadow-sm">
+                  <select
+                    value={rule.target}
+                    onChange={(e) =>
+                      handleTargetChange(
+                        index,
+                        (e.target as unknown as { value: string }).value as AutoSuspendTarget
+                      )
+                    }
+                    class="inline-flex items-center px-2 py-1.5 text-sm border border-r-0 border-raft-300 rounded-l-md bg-raft-50 text-raft-700 focus:ring-raft-500 focus:border-raft-500"
+                    aria-label={`Target for rule ${index + 1}`}
+                  >
+                    {TARGET_OPTIONS.map((opt) => (
+                      <option value={opt.value}>{opt.label}</option>
+                    ))}
+                  </select>
+                  <input
+                    id={`auto-suspend-regex-${index}`}
+                    type="text"
+                    value={rule.pattern}
+                    onInput={(e) => handlePatternChange(index, (e.target as HTMLInputElement).value)}
+                    placeholder={placeholderFor(rule.target)}
+                    class={`flex-1 min-w-0 px-3 py-1.5 text-sm border rounded-r-md focus:ring-raft-500 focus:border-raft-500 ${
+                      valid
+                        ? 'border-raft-300'
+                        : 'border-red-300 focus:ring-red-500 focus:border-red-500'
+                    }`}
+                    aria-invalid={!valid}
+                    aria-describedby={!valid ? `regex-error-${index}` : undefined}
+                  />
+                </div>
                 {!valid && (
                   <p id={`regex-error-${index}`} class="text-xs text-red-600 mt-1">
                     Invalid regular expression
@@ -215,7 +259,7 @@ export function AutoSuspendRegexPanel({ settings, onChange }: AutoSuspendRegexPa
                     type="button"
                     onClick={() => openDialog(index)}
                     class="text-sm text-raft-600 hover:text-raft-800 underline underline-offset-2"
-                    aria-label={`${count} tab${count !== 1 ? 's' : ''} match regex ${index + 1}`}
+                    aria-label={`${count} tab${count !== 1 ? 's' : ''} match rule ${index + 1}`}
                   >
                     {count} tab{count !== 1 ? 's' : ''}
                   </button>
@@ -229,7 +273,7 @@ export function AutoSuspendRegexPanel({ settings, onChange }: AutoSuspendRegexPa
                   type="button"
                   onClick={() => handleRemove(index)}
                   class="p-1 text-raft-400 hover:text-red-600 transition-colors"
-                  aria-label={`Remove regex ${index + 1}`}
+                  aria-label={`Remove rule ${index + 1}`}
                   title="Remove"
                 >
                   <svg
@@ -278,7 +322,7 @@ export function AutoSuspendRegexPanel({ settings, onChange }: AutoSuspendRegexPa
       {/* Matching tabs dialog */}
       <Dialog
         open={dialogOpen}
-        title={`Tabs matching ${selectedPattern}`}
+        title={`Tabs matching ${selectedRule?.pattern ?? ''}`}
         titleId="matching-tabs-title"
         onClose={closeDialog}
         class="fixed inset-0 z-50 flex items-center justify-center"
@@ -328,6 +372,11 @@ export function AutoSuspendRegexPanel({ settings, onChange }: AutoSuspendRegexPa
                       <p class="text-xs text-raft-500 truncate" title={tab.url}>
                         {tab.url}
                       </p>
+                      {tab.groupName && (
+                        <p class="text-xs text-raft-400 truncate" title={tab.groupName}>
+                          Group: {tab.groupName}
+                        </p>
+                      )}
                     </div>
                     <button
                       type="button"

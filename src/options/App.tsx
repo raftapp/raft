@@ -701,9 +701,9 @@ export function App() {
                   </h3>
                   <AutoSuspendRegexPanel
                     settings={settings}
-                    onChange={(autoSuspendRegexes) =>
+                    onChange={(autoSuspendRules) =>
                       handleSettingChange({
-                        suspension: { autoSuspendRegexes },
+                        suspension: { autoSuspendRules },
                       })
                     }
                   />

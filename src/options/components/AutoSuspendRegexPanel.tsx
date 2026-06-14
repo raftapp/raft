@@ -1,9 +1,10 @@
 /**
  * Auto-Suspend Regex Exceptions Panel
  *
- * Allows users to define regex patterns that prevent automatic suspension
- * and startup hibernation. Manual suspend (popup, context menu, shortcut)
- * is not affected.
+ * Allows users to define regex patterns that prevent automatic suspension,
+ * startup hibernation, and bulk manual actions ("Suspend All Tabs" / "Suspend
+ * Other Tabs" from the popup). Direct actions such as the keyboard shortcut
+ * and context menu ignore these exceptions and still suspend.
  *
  * Each pattern is an independent input. Matching is OR: a tab is exempt if
  * its full URL matches at least one valid regex (case-insensitive).

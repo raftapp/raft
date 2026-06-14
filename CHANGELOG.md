@@ -4,6 +4,11 @@ All notable changes to Raft will be documented in this file.
 
 Format based on [Keep a Changelog](https://keepachangelog.com/).
 
+## [Unreleased]
+
+### Added
+- Auto-suspend regex exceptions in Raft Settings. Users can define multiple regex patterns that prevent automatic suspension and startup hibernation. Matching is OR and applied case-insensitively to the full tab URL. Manual suspend (popup, context menu, keyboard shortcut, button) is not blocked. Each rule shows a live count of matching open tabs; clicking the count opens a popup with the list and a "Go to tab" action.
+
 ## [1.2.0] - 2026-05-12
 
 ### Changed

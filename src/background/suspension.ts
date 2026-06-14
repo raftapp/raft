@@ -2,7 +2,7 @@
  * Tab Suspension Service
  *
  * Handles all suspension logic including:
- * - Protection rules (pinned, audio, whitelist)
+ * - Protection rules (pinned, audio, whitelist, regex auto-suspend exceptions)
  * - Manual and auto-suspension using Chrome's native tabs.discard() API
  *
  * Uses Chrome's native tab discarding - discarded tabs preserve scroll position,
@@ -13,6 +13,31 @@ import { settingsStorage, tabActivityStorage } from '@/shared/storage'
 import { PROTECTED_URL_PATTERNS } from '@/shared/constants'
 import type { Settings } from '@/shared/types'
 import { browser } from '@/shared/browser'
+
+/**
+ * Reason why a tab is being checked for suspension.
+ * - 'auto': automatic suspension (inactivity, startup hibernation).
+ * - 'manual': user-triggered suspension (popup, context menu, keyboard shortcut).
+ */
+export type SuspensionReason = 'auto' | 'manual'
+
+/**
+ * Options for suspendTab / suspendOtherTabs / suspendAllTabs
+ */
+export interface SuspendOptions {
+  /** Suspension trigger context; defaults to 'manual' */
+  reason?: SuspensionReason
+  /** If true, auto-suspend regex exceptions are ignored (used by shortcut/context menu) */
+  ignoreRegex?: boolean
+}
+
+/**
+ * Options for canSuspendTab
+ */
+export interface CanSuspendOptions {
+  /** Suspension trigger context; defaults to 'manual' */
+  reason?: SuspensionReason
+}
 
 /**
  * Result of checking if a tab can be suspended
@@ -61,13 +86,40 @@ function matchesWhitelist(url: string, whitelist: string[]): boolean {
   })
 }
 
+/** Maximum length for a single auto-suspend regex pattern to prevent ReDoS */
+const MAX_AUTO_SUSPEND_REGEX_LENGTH = 500
+
+/**
+ * Check if a URL matches any auto-suspend exception regex.
+ * Regexes are tested case-insensitively against the full URL.
+ * Invalid or too-long patterns are ignored.
+ */
+function matchesAutoSuspendRegex(url: string, regexes: string[]): boolean {
+  return regexes.some((pattern) => {
+    if (!pattern.trim()) return false
+    if (pattern.length > MAX_AUTO_SUSPEND_REGEX_LENGTH) {
+      console.warn('[Raft] Auto-suspend regex too long, skipping:', pattern.slice(0, 50) + '...')
+      return false
+    }
+    try {
+      const regex = new RegExp(pattern, 'i')
+      return regex.test(url)
+    } catch {
+      console.warn('[Raft] Invalid auto-suspend regex:', pattern)
+      return false
+    }
+  })
+}
+
 /**
  * Check if a tab can be suspended based on protection rules
  */
 export async function canSuspendTab(
   tab: browser.tabs.Tab,
-  settings?: Settings
+  settings?: Settings,
+  options: CanSuspendOptions = {}
 ): Promise<SuspensionCheck> {
+  const { reason = 'manual' } = options
   const s = settings ?? (await settingsStorage.get())
 
   // No URL (new tab, etc.)
@@ -95,9 +147,14 @@ export async function canSuspendTab(
     return { canSuspend: false, reason: 'Playing audio' }
   }
 
-  // Whitelist check
+  // Whitelist check (applies to both auto and manual)
   if (matchesWhitelist(tab.url, s.suspension.whitelist)) {
     return { canSuspend: false, reason: 'Whitelisted' }
+  }
+
+  // Auto-suspend regex exceptions only apply to automatic suspension.
+  if (reason === 'auto' && matchesAutoSuspendRegex(tab.url, s.suspension.autoSuspendRegexes)) {
+    return { canSuspend: false, reason: 'Auto-suspend exception' }
   }
 
   return { canSuspend: true }
@@ -107,10 +164,23 @@ export async function canSuspendTab(
  * Suspend a single tab using Chrome's native discard API.
  * Returns true if suspension was successful.
  */
-export async function suspendTab(tabId: number): Promise<boolean> {
+export async function suspendTab(tabId: number, options: SuspendOptions = {}): Promise<boolean> {
+  const { reason = 'manual', ignoreRegex = false } = options
   try {
     const tab = await browser.tabs.get(tabId)
-    const check = await canSuspendTab(tab)
+
+    // Regex exceptions block manual suspend unless explicitly ignored.
+    // Bulk actions like "Suspend All Tabs" pass ignoreRegex=false (default);
+    // shortcut/context menu actions pass ignoreRegex=true.
+    if (
+      !ignoreRegex &&
+      tab.url &&
+      matchesAutoSuspendRegex(tab.url, (await settingsStorage.get()).suspension.autoSuspendRegexes)
+    ) {
+      return false
+    }
+
+    const check = await canSuspendTab(tab, undefined, { reason })
 
     if (!check.canSuspend) {
       return false
@@ -132,7 +202,11 @@ export async function suspendTab(tabId: number): Promise<boolean> {
 /**
  * Suspend all other tabs in the current window
  */
-export async function suspendOtherTabs(windowId?: number): Promise<number> {
+export async function suspendOtherTabs(
+  windowId?: number,
+  options: SuspendOptions = {}
+): Promise<number> {
+  const { reason = 'manual', ignoreRegex = false } = options
   const targetWindowId = windowId ?? (await browser.windows.getCurrent()).id
   const tabs = await browser.tabs.query({ windowId: targetWindowId })
   const settings = await settingsStorage.get()
@@ -140,9 +214,9 @@ export async function suspendOtherTabs(windowId?: number): Promise<number> {
   let suspended = 0
   for (const tab of tabs) {
     if (tab.id && !tab.active) {
-      const check = await canSuspendTab(tab, settings)
+      const check = await canSuspendTab(tab, settings, { reason })
       if (check.canSuspend) {
-        const success = await suspendTab(tab.id)
+        const success = await suspendTab(tab.id, { reason, ignoreRegex })
         if (success) suspended++
       }
     }
@@ -157,7 +231,8 @@ export async function suspendOtherTabs(windowId?: number): Promise<number> {
  * For startup hibernation (which needs to suspend active tabs too), the onStartup
  * handler opens a Raft page as the active tab first, then uses suspendOtherTabs().
  */
-export async function suspendAllTabs(): Promise<number> {
+export async function suspendAllTabs(options: SuspendOptions = {}): Promise<number> {
+  const { reason = 'manual', ignoreRegex = false } = options
   const windows = await browser.windows.getAll({ populate: true })
   const settings = await settingsStorage.get()
   let suspended = 0
@@ -166,9 +241,9 @@ export async function suspendAllTabs(): Promise<number> {
     if (!win.id || !win.tabs) continue
     for (const tab of win.tabs) {
       if (tab.id && !tab.active) {
-        const check = await canSuspendTab(tab, settings)
+        const check = await canSuspendTab(tab, settings, { reason })
         if (check.canSuspend) {
-          const success = await suspendTab(tab.id)
+          const success = await suspendTab(tab.id, { reason, ignoreRegex })
           if (success) suspended++
         }
       }
@@ -210,9 +285,9 @@ export async function checkForInactiveTabs(): Promise<number> {
     if (lastActive > cutoff) continue
 
     // Check protection rules and suspend if allowed
-    const check = await canSuspendTab(tab, settings)
+    const check = await canSuspendTab(tab, settings, { reason: 'auto' })
     if (check.canSuspend) {
-      const success = await suspendTab(tab.id)
+      const success = await suspendTab(tab.id, { reason: 'auto' })
       if (success) {
         suspended++
       }
@@ -220,6 +295,28 @@ export async function checkForInactiveTabs(): Promise<number> {
   }
 
   return suspended
+}
+
+/**
+ * Find currently open tabs whose full URL matches at least one of the given regex patterns.
+ * Used by the settings UI to preview matching tabs.
+ */
+export async function findMatchingTabs(
+  regexes: string[]
+): Promise<Array<{ id: number; title?: string; url: string; windowId?: number }>> {
+  if (!regexes.some((r) => r.trim())) {
+    return []
+  }
+
+  const tabs = await browser.tabs.query({})
+  const matching = tabs.filter((tab) => tab.url && matchesAutoSuspendRegex(tab.url, regexes))
+
+  return matching.map((tab) => ({
+    id: tab.id ?? 0,
+    title: tab.title,
+    url: tab.url ?? '',
+    windowId: tab.windowId,
+  }))
 }
 
 /**

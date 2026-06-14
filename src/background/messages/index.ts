@@ -17,11 +17,13 @@ export async function handleMessage(message: MessageType): Promise<MessageRespon
   try {
     switch (message.type) {
       case 'SUSPEND_TAB':
+      case 'FORCE_SUSPEND_TAB':
       case 'SUSPEND_OTHER_TABS':
       case 'SUSPEND_ALL_TABS':
       case 'RESTORE_ALL_TABS':
       case 'GET_TAB_COUNTS':
       case 'GET_CURRENT_TAB_STATUS':
+      case 'GET_MATCHING_TABS':
       case 'GET_SETTINGS':
       case 'UPDATE_SETTINGS':
         return await handleSuspensionMessage(message)

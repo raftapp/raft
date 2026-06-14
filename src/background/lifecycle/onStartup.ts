@@ -49,7 +49,7 @@ export async function handleStartup(): Promise<void> {
       }
     }
 
-    const count = await suspendOtherTabs(win.id)
+    const count = await suspendOtherTabs(win.id, { reason: 'auto' })
     console.log(`[Raft] Hibernated ${count} tabs in window ${win.id}`)
   }
 

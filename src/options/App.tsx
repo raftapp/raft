@@ -17,6 +17,7 @@ import { ImportExportPanel } from './components/ImportExportPanel'
 import { CloudSyncPanel } from './components/CloudSyncPanel'
 import { DevToolsPanel } from './components/DevToolsPanel'
 import { BackupDashboard } from './components/BackupDashboard'
+import { AutoSuspendRegexPanel } from './components/AutoSuspendRegexPanel'
 import { ToastContainer, useToast } from '@/shared/components/Toast'
 import { Otter } from '@/shared/components/Otter'
 import {
@@ -692,6 +693,20 @@ export function App() {
                     />
                     <span class="text-raft-700">Hibernate tabs when browser starts</span>
                   </label>
+                </div>
+
+                <div class={`mt-6 ${!settings.suspension.enabled ? 'opacity-50' : ''}`}>
+                  <h3 class="text-sm font-medium text-raft-700 mb-3">
+                    Auto-Suspend Exceptions (Regex)
+                  </h3>
+                  <AutoSuspendRegexPanel
+                    settings={settings}
+                    onChange={(autoSuspendRegexes) =>
+                      handleSettingChange({
+                        suspension: { autoSuspendRegexes },
+                      })
+                    }
+                  />
                 </div>
               </section>
 

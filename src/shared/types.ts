@@ -128,6 +128,8 @@ export interface Settings {
     neverSuspendForms: boolean
     /** URL patterns to whitelist (never suspend) */
     whitelist: string[]
+    /** Regex patterns that prevent automatic suspension/hibernation only */
+    autoSuspendRegexes: string[]
     /** Hibernate all restored tabs immediately when Chrome starts */
     hibernateOnStartup: boolean
   }
@@ -171,6 +173,7 @@ export const DEFAULT_SETTINGS: Settings = {
     neverSuspendAudio: true,
     neverSuspendForms: true,
     whitelist: [],
+    autoSuspendRegexes: [],
     hibernateOnStartup: false,
   },
   autoSave: {

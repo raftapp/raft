@@ -26,7 +26,7 @@
 import { browser } from '@/shared/browser'
 import { settingsStorage } from '@/shared/storage'
 import { SESSION_KEYS } from '@/shared/constants'
-import { suspendOtherTabs } from '../suspension'
+import { suspendOtherTabs, canSuspendTab } from '../suspension'
 
 export async function maybeHibernateTab(tabId: number): Promise<void> {
   const result = await browser.storage.session.get(SESSION_KEYS.HIBERNATION_GUARD)
@@ -45,6 +45,12 @@ export async function maybeHibernateTab(tabId: number): Promise<void> {
   const tab = await browser.tabs.get(tabId)
   if (tab.active) return
   if (tab.discarded) return
+
+  const check = await canSuspendTab(tab, undefined, { reason: 'auto' })
+  if (!check.canSuspend) {
+    console.log(`[Raft] Hibernation guard: skipping tab ${tabId} (${check.reason})`)
+    return
+  }
 
   console.log(`[Raft] Hibernation guard: discarding tab ${tabId} (${tab.url})`)
   try {
@@ -78,6 +84,6 @@ export async function hibernateWindow(windowId: number): Promise<void> {
     })
   }
 
-  const count = await suspendOtherTabs(windowId)
+  const count = await suspendOtherTabs(windowId, { reason: 'auto' })
   console.log(`[Raft] Hibernation guard: hibernated ${count} tabs in late window ${windowId}`)
 }

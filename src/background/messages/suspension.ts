@@ -8,6 +8,7 @@ import {
   restoreAllTabs,
   getTabCounts,
   canSuspendTab,
+  findMatchingTabs,
 } from '../suspension'
 import { updateBadge } from '../badge'
 import { setupSuspensionAlarm, setupAutoSaveAlarm, setupExportReminderAlarm } from '../alarms'
@@ -18,11 +19,13 @@ type SuspensionMessage = Extract<
   {
     type:
       | 'SUSPEND_TAB'
+      | 'FORCE_SUSPEND_TAB'
       | 'SUSPEND_OTHER_TABS'
       | 'SUSPEND_ALL_TABS'
       | 'RESTORE_ALL_TABS'
       | 'GET_TAB_COUNTS'
       | 'GET_CURRENT_TAB_STATUS'
+      | 'GET_MATCHING_TABS'
       | 'GET_SETTINGS'
       | 'UPDATE_SETTINGS'
   }
@@ -51,6 +54,15 @@ export async function handleSuspensionMessage(
       const count = await suspendAllTabs()
       await updateBadge()
       return { success: true, data: { suspended: count } }
+    }
+
+    case 'FORCE_SUSPEND_TAB': {
+      const suspended = await suspendTab(message.tabId, { ignoreRegex: true })
+      await updateBadge()
+      if (suspended) {
+        return { success: true, data: { suspended: true } }
+      }
+      return { success: false, error: 'Tab could not be suspended' }
     }
 
     case 'RESTORE_ALL_TABS': {
@@ -86,6 +98,13 @@ export async function handleSuspensionMessage(
           reason: check.reason,
         },
       }
+    }
+
+    case 'GET_MATCHING_TABS': {
+      const settings = await settingsStorage.get()
+      const regexes = message.regexes ?? settings.suspension.autoSuspendRegexes
+      const matching = await findMatchingTabs(regexes)
+      return { success: true, data: matching }
     }
 
     case 'GET_SETTINGS': {

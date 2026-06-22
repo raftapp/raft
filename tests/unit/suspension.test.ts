@@ -10,6 +10,7 @@ import {
   setMockStorage,
   addMockTab,
   addMockWindow,
+  addMockTabGroup,
   getMockTabs,
 } from '../mocks/chrome'
 import {
@@ -21,10 +22,11 @@ import {
   getWindowTabsStatus,
   getTabCounts,
   restoreAllTabs,
+  findMatchingTabs,
 } from '@/background/suspension'
 import { STORAGE_KEYS } from '@/shared/constants'
 import { DEFAULT_SETTINGS } from '@/shared/types'
-import type { Settings } from '@/shared/types'
+import type { AutoSuspendRule, Settings } from '@/shared/types'
 
 describe('canSuspendTab', () => {
   const defaultSettings: Settings = DEFAULT_SETTINGS
@@ -357,6 +359,59 @@ describe('suspendTab', () => {
     const result = await suspendTab(999)
 
     expect(result).toBe(false)
+  })
+})
+
+describe('findMatchingTabs', () => {
+  beforeEach(() => {
+    addMockWindow({ id: 1, focused: true })
+  })
+
+  it('should return tabs whose URL matches any regex', async () => {
+    addMockTab({
+      id: 1,
+      windowId: 1,
+      url: 'https://mail.google.com/mail/u/0/',
+      title: 'Gmail',
+      active: false,
+    })
+    addMockTab({
+      id: 2,
+      windowId: 1,
+      url: 'https://example.com',
+      title: 'Example',
+      active: false,
+    })
+    addMockTab({
+      id: 3,
+      windowId: 1,
+      url: 'https://calendar.google.com/',
+      title: 'Calendar',
+      active: false,
+    })
+
+    const matches = await findMatchingTabs([
+      { pattern: '^https://mail\\.google\\.com/.*', target: 'url' },
+      { pattern: '^https://calendar\\.google\\.com/.*', target: 'url' },
+    ])
+
+    expect(matches).toHaveLength(2)
+    expect(matches.map((m) => m.id)).toContain(1)
+    expect(matches.map((m) => m.id)).toContain(3)
+  })
+
+  it('should return an empty array when no regex is provided', async () => {
+    addMockTab({
+      id: 1,
+      windowId: 1,
+      url: 'https://example.com',
+      title: 'Example',
+      active: false,
+    })
+
+    const matches = await findMatchingTabs([])
+
+    expect(matches).toHaveLength(0)
   })
 })
 
@@ -802,7 +857,149 @@ describe('getWindowTabsStatus', () => {
 })
 
 describe('matchesWhitelist (via canSuspendTab)', () => {
-  it('should handle invalid regex patterns gracefully', async () => {
+    it('should handle invalid regex patterns gracefully', async () => {
+      const tab = {
+        id: 1,
+        url: 'https://example.com',
+        pinned: false,
+        audible: false,
+        discarded: false,
+      } as chrome.tabs.Tab
+
+      const settings: Settings = {
+        ...DEFAULT_SETTINGS,
+        suspension: {
+          ...DEFAULT_SETTINGS.suspension,
+          whitelist: ['[invalid(regex'],
+        },
+      }
+
+      // Should not throw and should not match (tab remains suspendable)
+      const result = await canSuspendTab(tab, settings)
+
+      expect(result.canSuspend).toBe(true)
+      expect(result.reason).toBeUndefined()
+    })
+})
+
+describe('auto-suspend regex exceptions', () => {
+    it('should block auto-suspend for matching URLs', async () => {
+      const tab = {
+        id: 1,
+        url: 'https://mail.google.com/mail/u/0/',
+        pinned: false,
+        audible: false,
+        discarded: false,
+      } as chrome.tabs.Tab
+
+      const settings: Settings = {
+        ...DEFAULT_SETTINGS,
+        suspension: {
+          ...DEFAULT_SETTINGS.suspension,
+          autoSuspendRules: [{ pattern: '^https://mail\\.google\\.com/.*', target: 'url' }],
+        },
+      }
+
+      const result = await canSuspendTab(tab, settings, { reason: 'auto' })
+
+      expect(result.canSuspend).toBe(false)
+      expect(result.reason).toBe('Auto-suspend exception')
+    })
+
+    it('should be case-insensitive when matching auto-suspend regexes', async () => {
+      const tab = {
+        id: 1,
+        url: 'https://MAIL.GOOGLE.COM/mail/u/0/',
+        pinned: false,
+        audible: false,
+        discarded: false,
+      } as chrome.tabs.Tab
+
+      const settings: Settings = {
+        ...DEFAULT_SETTINGS,
+        suspension: {
+          ...DEFAULT_SETTINGS.suspension,
+          autoSuspendRules: [{ pattern: '^https://mail\\.google\\.com/.*', target: 'url' }],
+        },
+      }
+
+      const result = await canSuspendTab(tab, settings, { reason: 'auto' })
+
+      expect(result.canSuspend).toBe(false)
+    })
+
+  it('should match against the full URL, not a substring', async () => {
+    const tab = {
+      id: 1,
+      url: 'https://not-example.com/',
+      pinned: false,
+      audible: false,
+      discarded: false,
+    } as chrome.tabs.Tab
+
+    const settings: Settings = {
+      ...DEFAULT_SETTINGS,
+      suspension: {
+        ...DEFAULT_SETTINGS.suspension,
+        autoSuspendRules: [{ pattern: '^https://example\\.com/.*', target: 'url' }],
+      },
+    }
+
+    const result = await canSuspendTab(tab, settings, { reason: 'auto' })
+
+    expect(result.canSuspend).toBe(true)
+  })
+
+    it('should not block manual suspend for matching URLs by default', async () => {
+      const tab = {
+        id: 1,
+        url: 'https://mail.google.com/mail/u/0/',
+        pinned: false,
+        audible: false,
+        discarded: false,
+      } as chrome.tabs.Tab
+
+      const settings: Settings = {
+        ...DEFAULT_SETTINGS,
+        suspension: {
+          ...DEFAULT_SETTINGS.suspension,
+          autoSuspendRules: [{ pattern: '^https://mail\\.google\\.com/.*', target: 'url' }],
+        },
+      }
+
+      const result = await canSuspendTab(tab, settings, { reason: 'manual' })
+
+      expect(result.canSuspend).toBe(true)
+    })
+
+    it('should ignore regex exceptions when ignoreRegex is true', async () => {
+      const win = addMockWindow({ id: 100, focused: true })
+      addMockTab({
+        id: 1001,
+        windowId: win.id,
+        url: 'https://mail.google.com/mail/u/0/',
+        active: false,
+      })
+
+      setMockStorage({
+        [STORAGE_KEYS.SETTINGS]: {
+          suspension: {
+            enabled: true,
+            neverSuspendPinned: true,
+            neverSuspendAudio: true,
+            whitelist: [],
+            autoSuspendRules: [{ pattern: '^https://mail\\.google\\.com/.*', target: 'url' }],
+          },
+        },
+      })
+
+      const result = await suspendTab(1001, { ignoreRegex: true })
+
+      expect(result).toBe(true)
+      expect(getMockTabs().find((t) => t.id === 1001)?.discarded).toBe(true)
+    })
+
+  it('should ignore invalid regexes', async () => {
     const tab = {
       id: 1,
       url: 'https://example.com',
@@ -815,14 +1012,111 @@ describe('matchesWhitelist (via canSuspendTab)', () => {
       ...DEFAULT_SETTINGS,
       suspension: {
         ...DEFAULT_SETTINGS.suspension,
-        whitelist: ['[invalid(regex'],
+        autoSuspendRules: [{ pattern: '[invalid(regex', target: 'url' }],
       },
     }
 
-    // Should not throw and should not match (tab remains suspendable)
-    const result = await canSuspendTab(tab, settings)
+    const result = await canSuspendTab(tab, settings, { reason: 'auto' })
 
     expect(result.canSuspend).toBe(true)
-    expect(result.reason).toBeUndefined()
+  })
+
+  it('should combine multiple regexes with OR', async () => {
+    const tab = {
+      id: 1,
+      url: 'https://calendar.google.com/',
+      pinned: false,
+      audible: false,
+      discarded: false,
+    } as chrome.tabs.Tab
+
+    const settings: Settings = {
+      ...DEFAULT_SETTINGS,
+      suspension: {
+        ...DEFAULT_SETTINGS.suspension,
+        autoSuspendRules: [
+          { pattern: '^https://mail\\.google\\.com/.*', target: 'url' },
+          { pattern: '^https://calendar\\.google\\.com/.*', target: 'url' },
+        ],
+      },
+    }
+
+    const result = await canSuspendTab(tab, settings, { reason: 'auto' })
+
+    expect(result.canSuspend).toBe(false)
+    expect(result.reason).toBe('Auto-suspend exception')
+  })
+
+  it('should block auto-suspend for tabs in a matching tab group', async () => {
+    const win = addMockWindow({ id: 200, focused: true })
+    addMockTabGroup({ id: 10, windowId: win.id, title: 'Work urgent' })
+    const tab = {
+      id: 1,
+      url: 'https://example.com',
+      pinned: false,
+      audible: false,
+      discarded: false,
+      groupId: 10,
+    } as unknown as chrome.tabs.Tab
+
+    const settings: Settings = {
+      ...DEFAULT_SETTINGS,
+      suspension: {
+        ...DEFAULT_SETTINGS.suspension,
+        autoSuspendRules: [{ pattern: '^Work.*', target: 'tabGroupName' }],
+      },
+    }
+
+    const result = await canSuspendTab(tab, settings, { reason: 'auto' })
+
+    expect(result.canSuspend).toBe(false)
+    expect(result.reason).toBe('Auto-suspend exception')
+  })
+
+  it('should not block auto-suspend for ungrouped tabs with tab group rule', async () => {
+    const tab = {
+      id: 1,
+      url: 'https://example.com',
+      pinned: false,
+      audible: false,
+      discarded: false,
+    } as chrome.tabs.Tab
+
+    const settings: Settings = {
+      ...DEFAULT_SETTINGS,
+      suspension: {
+        ...DEFAULT_SETTINGS.suspension,
+        autoSuspendRules: [{ pattern: '^Work.*', target: 'tabGroupName' }],
+      },
+    }
+
+    const result = await canSuspendTab(tab, settings, { reason: 'auto' })
+
+    expect(result.canSuspend).toBe(true)
+  })
+
+  it('should not block auto-suspend for tabs in a non-matching tab group', async () => {
+    const win = addMockWindow({ id: 201, focused: true })
+    addMockTabGroup({ id: 11, windowId: win.id, title: 'Personal' })
+    const tab = {
+      id: 1,
+      url: 'https://example.com',
+      pinned: false,
+      audible: false,
+      discarded: false,
+      groupId: 11,
+    } as unknown as chrome.tabs.Tab
+
+    const settings: Settings = {
+      ...DEFAULT_SETTINGS,
+      suspension: {
+        ...DEFAULT_SETTINGS.suspension,
+        autoSuspendRules: [{ pattern: '^Work.*', target: 'tabGroupName' }],
+      },
+    }
+
+    const result = await canSuspendTab(tab, settings, { reason: 'auto' })
+
+    expect(result.canSuspend).toBe(true)
   })
 })

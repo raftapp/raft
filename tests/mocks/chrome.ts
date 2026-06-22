@@ -484,6 +484,12 @@ export function createMockChrome() {
     },
 
     tabGroups: {
+      get: vi.fn(async (groupId: number) => {
+        const group = mockTabGroups.get(groupId)
+        if (!group) throw new Error(`Group ${groupId} not found`)
+        return { ...group }
+      }),
+
       query: vi.fn(async (queryInfo: chrome.tabGroups.QueryInfo) => {
         let results = Array.from(mockTabGroups.values())
 

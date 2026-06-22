@@ -120,11 +120,11 @@ export async function handleContextMenuClick(
   if (!tab?.id) return
   switch (info.menuItemId) {
     case 'suspend-tab':
-      await suspendTab(tab.id)
+      await suspendTab(tab.id, { ignoreRegex: true })
       await updateBadge()
       break
     case 'suspend-other-tabs':
-      await suspendOtherTabs(tab.windowId)
+      await suspendOtherTabs(tab.windowId, { ignoreRegex: true })
       await updateBadge()
       break
   }
@@ -153,14 +153,14 @@ export async function handleCommand(command: string): Promise<void> {
     case 'suspend-current-tab': {
       const [tab] = await browser.tabs.query({ active: true, currentWindow: true })
       if (tab?.id) {
-        await suspendTab(tab.id)
+        await suspendTab(tab.id, { ignoreRegex: true })
         await updateBadge()
       }
       break
     }
     case 'suspend-other-tabs': {
       const window = await browser.windows.getCurrent()
-      await suspendOtherTabs(window.id)
+      await suspendOtherTabs(window.id, { ignoreRegex: true })
       await updateBadge()
       break
     }

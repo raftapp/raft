@@ -14,7 +14,7 @@
 
 import type { Session, Folder, Settings } from './types'
 import { STORAGE_KEYS } from './constants'
-import { DEFAULT_SETTINGS } from './types'
+import { DEFAULT_SETTINGS, migrateAutoSuspendRules } from './types'
 import { browser } from './browser'
 
 /**
@@ -68,10 +68,26 @@ export const settingsStorage = {
    */
   async get(): Promise<Settings> {
     const stored = await storage.get<Partial<Settings>>(STORAGE_KEYS.SETTINGS, {})
+
+    // Migrate legacy autoSuspendRegexes (string[]) to autoSuspendRules (AutoSuspendRule[]).
+    const legacyRegexes = (stored.suspension as { autoSuspendRegexes?: string[] } | undefined)
+      ?.autoSuspendRegexes
+    const migratedRules = migrateAutoSuspendRules(legacyRegexes)
+
+    const suspension = {
+      ...DEFAULT_SETTINGS.suspension,
+      ...stored.suspension,
+      autoSuspendRules:
+        migratedRules ??
+        (stored.suspension as { autoSuspendRules?: typeof DEFAULT_SETTINGS.suspension.autoSuspendRules })
+          ?.autoSuspendRules ??
+        DEFAULT_SETTINGS.suspension.autoSuspendRules,
+    }
+
     return {
       ...DEFAULT_SETTINGS,
       ...stored,
-      suspension: { ...DEFAULT_SETTINGS.suspension, ...stored.suspension },
+      suspension,
       autoSave: { ...DEFAULT_SETTINGS.autoSave, ...stored.autoSave },
       ui: { ...DEFAULT_SETTINGS.ui, ...stored.ui },
     }

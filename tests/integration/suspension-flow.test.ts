@@ -268,6 +268,46 @@ describe('Suspension Flow Integration', () => {
       expect(tabs.find((t) => t.id === 1)?.discarded).toBe(false)
       expect(tabs.find((t) => t.id === 2)?.discarded).toBe(true)
     })
+
+    it('should respect auto-suspend regex exceptions in bulk operations', async () => {
+      setMockStorage({
+        [STORAGE_KEYS.SETTINGS]: {
+          suspension: {
+            enabled: true,
+            neverSuspendPinned: true,
+            neverSuspendAudio: true,
+            whitelist: [],
+            autoSuspendRegexes: ['^https://mail\\.google\\.com/.*'],
+          },
+        },
+      })
+
+      addMockTab({
+        id: 1,
+        windowId: 1,
+        url: 'https://mail.google.com/mail/u/0/',
+        active: false,
+        pinned: false,
+        audible: false,
+      })
+
+      addMockTab({
+        id: 2,
+        windowId: 1,
+        url: 'https://example.com',
+        active: false,
+        pinned: false,
+        audible: false,
+      })
+
+      const count = await suspendAllTabs()
+
+      expect(count).toBe(1) // Only the non-matching tab
+
+      const tabs = getMockTabs()
+      expect(tabs.find((t) => t.id === 1)?.discarded).toBe(false)
+      expect(tabs.find((t) => t.id === 2)?.discarded).toBe(true)
+    })
   })
 
   describe('inactivity-based auto-suspension', () => {

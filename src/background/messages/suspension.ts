@@ -18,7 +18,6 @@ type SuspensionMessage = Extract<
   MessageType,
   {
     type:
-      | 'SUSPEND_TAB'
       | 'FORCE_SUSPEND_TAB'
       | 'SUSPEND_OTHER_TABS'
       | 'SUSPEND_ALL_TABS'
@@ -35,15 +34,6 @@ export async function handleSuspensionMessage(
   message: SuspensionMessage
 ): Promise<MessageResponse> {
   switch (message.type) {
-    case 'SUSPEND_TAB': {
-      const suspended = await suspendTab(message.tabId)
-      await updateBadge()
-      if (suspended) {
-        return { success: true, data: { suspended: true } }
-      }
-      return { success: false, error: 'Tab could not be suspended' }
-    }
-
     case 'SUSPEND_OTHER_TABS': {
       const count = await suspendOtherTabs(message.windowId)
       await updateBadge()

@@ -79,8 +79,11 @@ export const settingsStorage = {
       ...stored.suspension,
       autoSuspendRules:
         migratedRules ??
-        (stored.suspension as { autoSuspendRules?: typeof DEFAULT_SETTINGS.suspension.autoSuspendRules })
-          ?.autoSuspendRules ??
+        (
+          stored.suspension as {
+            autoSuspendRules?: typeof DEFAULT_SETTINGS.suspension.autoSuspendRules
+          }
+        )?.autoSuspendRules ??
         DEFAULT_SETTINGS.suspension.autoSuspendRules,
     }
 

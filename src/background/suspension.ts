@@ -201,7 +201,10 @@ export async function suspendTab(tabId: number, options: SuspendOptions = {}): P
     if (
       !ignoreRegex &&
       tab.url &&
-      (await matchesAutoSuspendRules(tab, (await settingsStorage.get()).suspension.autoSuspendRules))
+      (await matchesAutoSuspendRules(
+        tab,
+        (await settingsStorage.get()).suspension.autoSuspendRules
+      ))
     ) {
       return false
     }

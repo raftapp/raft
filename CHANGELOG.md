@@ -7,7 +7,7 @@ Format based on [Keep a Changelog](https://keepachangelog.com/).
 ## [Unreleased]
 
 ### Added
-- Auto-suspend exception rules in Raft Settings. Users can define multiple rules that prevent automatic suspension and startup hibernation. Each rule targets either the full tab URL or the native tab group name, and matching is OR'ed case-insensitively. Manual suspend (popup, context menu, keyboard shortcut, button) is not blocked. Each rule shows a live count of matching open tabs; clicking the count opens a popup with the list, the tab group name when applicable, and a "Go to tab" action. Existing `autoSuspendRegexes` settings are automatically migrated to the new rule format.
+- Auto-suspend exception rules in Raft Settings. Users can define multiple rules that prevent automatic suspension and startup hibernation. Each rule targets either the full tab URL or the native tab group name, and matching is OR'ed case-insensitively. Exceptions are honored by automatic (inactivity) suspension, startup hibernation, and the bulk **Suspend All Tabs** / **Suspend Other Tabs** actions; they are bypassed by direct single-tab intent — the keyboard shortcut, the context menu, and the popup's per-tab Suspend button — so an explicit suspend on one tab always wins. Each rule shows a live count of matching open tabs; clicking the count opens a popup with the list, the tab group name when applicable, and a "Go to tab" action. Existing `autoSuspendRegexes` settings are automatically migrated to the new rule format.
 
 ## [1.2.0] - 2026-05-12
 

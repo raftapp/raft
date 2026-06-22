@@ -16,7 +16,6 @@ export type { MessageType, MessageResponse } from './types'
 export async function handleMessage(message: MessageType): Promise<MessageResponse> {
   try {
     switch (message.type) {
-      case 'SUSPEND_TAB':
       case 'FORCE_SUSPEND_TAB':
       case 'SUSPEND_OTHER_TABS':
       case 'SUSPEND_ALL_TABS':

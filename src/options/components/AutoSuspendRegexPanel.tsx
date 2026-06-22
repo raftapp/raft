@@ -3,9 +3,9 @@
  *
  * Allows users to define rules that prevent automatic suspension,
  * startup hibernation, and bulk manual actions ("Suspend All Tabs" /
- * "Suspend Other Tabs" from the popup). Direct actions such as the
- * keyboard shortcut and context menu ignore these exceptions and still
- * suspend.
+ * "Suspend Other Tabs" from the popup). Direct single-tab actions — the
+ * keyboard shortcut, the context menu, and the popup's per-tab Suspend
+ * button — ignore these exceptions and still suspend.
  *
  * Each rule combines a pattern with a target. Matching is OR: a tab is
  * exempt if it matches at least one valid rule (case-insensitive).
@@ -187,9 +187,7 @@ export function AutoSuspendRegexPanel({ settings, onChange }: AutoSuspendRegexPa
       : []
 
   const placeholderFor = (target: AutoSuspendTarget) =>
-    target === 'tabGroupName'
-      ? 'e.g. ^Work.*'
-      : 'e.g. ^https://mail\\.google\\.com/.*'
+    target === 'tabGroupName' ? 'e.g. ^Work.*' : 'e.g. ^https://mail\\.google\\.com/.*'
 
   return (
     <div class="space-y-3">
@@ -197,7 +195,8 @@ export function AutoSuspendRegexPanel({ settings, onChange }: AutoSuspendRegexPa
         <p>
           Regex patterns that keep tabs awake during <strong>automatic</strong> suspension, startup
           hibernation, and bulk manual actions such as "Suspend All Tabs" and "Suspend Other Tabs".
-          Direct actions (keyboard shortcut, context menu) still suspend.
+          Direct single-tab actions (keyboard shortcut, context menu, and the popup's per-tab
+          Suspend button) still suspend.
         </p>
         <p class="mt-1 text-raft-500">
           Matching is case-insensitive. Multiple rules are combined with OR.
@@ -235,7 +234,9 @@ export function AutoSuspendRegexPanel({ settings, onChange }: AutoSuspendRegexPa
                     id={`auto-suspend-regex-${index}`}
                     type="text"
                     value={rule.pattern}
-                    onInput={(e) => handlePatternChange(index, (e.target as HTMLInputElement).value)}
+                    onInput={(e) =>
+                      handlePatternChange(index, (e.target as HTMLInputElement).value)
+                    }
                     placeholder={placeholderFor(rule.target)}
                     class={`flex-1 min-w-0 px-3 py-1.5 text-sm border rounded-r-md focus:ring-raft-500 focus:border-raft-500 ${
                       valid

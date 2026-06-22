@@ -92,6 +92,14 @@ Raft's source code is available for inspection. Every claim in this trust report
 | Alt+Shift+O | Suspend other tabs in window |
 | Alt+Shift+D | Close duplicate tabs |
 
+## Known Issues
+
+### Duplicate tab groups in Chrome's menu after restore
+
+After restoring a session, Chrome's three-dot menu → **Tab groups** (and the bookmarks-bar chips) may list a group more than once — e.g. `Work, Personal, Work, Personal` — even though the restored window itself shows each group correctly.
+
+This is a Chrome-side limitation, not data loss in Raft. Chrome's *saved tab groups* are persistent and expose no stable identity to extensions, so on restore Raft can only create fresh native groups; Chrome keeps the previously-saved entries alongside the new ones. Extensions cannot detect, reuse, or delete saved groups. The duplication is also an open Chromium bug ([crbug 365519965](https://issues.chromium.org/issues/365519965)), independently reproduced as recently as Chrome 148. The duplicate entries are harmless and can be removed manually from the same **Tab groups** menu.
+
 ## Tech Stack
 
 - **Build**: Vite + CRXJS

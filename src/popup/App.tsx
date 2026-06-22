@@ -240,7 +240,9 @@ export function App() {
     if (!currentTab?.tab.id || !currentTab.canSuspend) return
 
     setActionInProgress(true)
-    await sendMessage({ type: 'SUSPEND_TAB', tabId: currentTab.tab.id })
+    // Clicking suspend on a specific tab is direct user intent, so it bypasses
+    // auto-suspend exception rules (like the keyboard shortcut and context menu).
+    await sendMessage({ type: 'FORCE_SUSPEND_TAB', tabId: currentTab.tab.id })
     window.close()
   }
 

@@ -2,7 +2,6 @@ import type { AutoSuspendRule, MessageResponse, Settings } from '@/shared/types'
 import type { CloudTokens } from '@/shared/cloudSync'
 
 export type MessageType =
-  | { type: 'SUSPEND_TAB'; tabId: number }
   | { type: 'FORCE_SUSPEND_TAB'; tabId: number }
   | { type: 'SUSPEND_OTHER_TABS'; windowId?: number }
   | { type: 'SUSPEND_ALL_TABS' }

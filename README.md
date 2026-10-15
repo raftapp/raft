@@ -1,3 +1,21 @@
+> [!WARNING]
+> **Raft is no longer maintained.**
+
+I'm sorry. I don't have the time to keep supporting Raft, so I've stopped working on it and archived this repository. Thank you to everyone who installed it, reported bugs, and sent feedback.
+
+**If you have Raft installed:**
+
+- **Your installed copy keeps working.** Your sessions are stored locally in your browser, not on a server, so nothing is deleted. Raft won't get any more updates or fixes.
+- **Export your sessions.** Options → Sessions → Import / Export → **Export JSON**.
+- **Cloud sync** runs between your browser and your own Google Drive; there is no Raft server. If it stops working, your local sessions are unaffected. To remove the encrypted sync files from your Drive: [drive.google.com](https://drive.google.com) → Settings → Manage apps → Raft → Delete hidden app data.
+- **Raft is no longer on the Chrome Web Store**, and raftapp.io is going away.
+
+The code stays here, public and MIT-licensed. Fork it if you'd like to keep it going.
+
+— Kevin
+
+---
+
 <p align="center">
   <img src="public/mascot/awake-together.png" alt="Shells the otter keeping watch" width="280" />
 </p>
@@ -10,8 +28,6 @@
 </p>
 
 <p align="center"><strong>Keep your tabs safe.</strong> A Chrome extension for tab suspension and session management.</p>
-
-<p align="center"><a href="https://raftapp.io">raftapp.io</a> &middot; <a href="https://raftapp.io/trust">My Promise</a></p>
 
 Named after the way otters hold hands while sleeping to stay together — a group of otters is called a *raft*. Our mascot **Shells** keeps watch over your tabs, making sure they stay safe and connected.
 
@@ -50,15 +66,11 @@ Named after the way otters hold hands while sleeping to stay together — a grou
 
 All cloud-synced data is encrypted on your device before it leaves. Raft uses **AES-256-GCM** with a unique 96-bit IV per encryption operation. Encryption keys are derived from your password using **PBKDF2 with 100,000 iterations** (SHA-256). Your recovery key is shown once during setup and is never stored. OAuth uses **PKCE (S256)** to protect the authorization flow, and tokens are encrypted at rest with your password.
 
-See [Privacy Policy](https://raftapp.io/privacy) for full details.
-
 ### Privacy
 
 Raft collects **zero analytics, telemetry, or usage data**. Eight automated tests verify that no `fetch()` or `XMLHttpRequest` calls exist in the save, restore, import, or export code paths — your session data never touches a network unless you explicitly enable cloud sync.
 
 The extension's Content Security Policy restricts all network access to `googleapis.com` (for cloud sync). No other outbound connections are possible.
-
-See [Privacy Policy](https://raftapp.io/privacy).
 
 ### Automated Safety Tests
 
@@ -78,7 +90,7 @@ Raft requests only five permissions, each with a specific purpose:
 | `contextMenus` | Add "Suspend tab" to the right-click menu |
 | `identity` | Google OAuth for cloud sync |
 
-**Not requested:** `history`, `bookmarks`, `webRequest`, `<all_urls>`, `notifications`. See [Permissions Explained](https://raftapp.io/permissions) for full details.
+**Not requested:** `history`, `bookmarks`, `webRequest`, `<all_urls>`, `notifications`.
 
 ### Open Source
 
